@@ -9,6 +9,11 @@ import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
 
+// Derrière le proxy de Render/Cloudflare, il faut activer "trust proxy"
+// pour que express-rate-limit et les IP clientes fonctionnent correctement.
+// Voir: https://express-rate-limit.github.io/ERR_ERL_UNEXPECTED_X_FORWARDED_FOR/
+app.set('trust proxy', 1);
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
