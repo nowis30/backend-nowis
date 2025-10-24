@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int         @id @default(autoincrement())
+  email        String      @unique
+  passwordHash String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  properties   Property[]
+  companies    Company[]
+  shareholders Shareholder[]
+  roles        UserRole[]
+}
+
+model Property {
+  id               Int                  @id @default(autoincrement())
+  userId           Int
+  companyId        Int?
+  name             String
+  address          String?
+  acquisitionDate  DateTime?
+  purchasePrice    Decimal?
+  currentValue     Decimal?
+  notes            String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  user             User                  @relation(fields: [userId], references: [id])
+  company          Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  units            PropertyUnit[]
+  mortgages        Mortgage[]
+  revenues         Revenue[]
+  expenses         Expense[]
+  invoices         Invoice[]
+  depreciationInfo DepreciationSetting?
+  attachments      Attachment[]
+}
+
+model Company {
+  id            Int                     @id @default(autoincrement())
+  userId        Int
+  name          String
+  neq           String?
+  fiscalYearEnd DateTime?
+  province      String?
+  notes         String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties         Property[]
+  shareholderLinks   CompanyShareholder[]
+  shareClasses       ShareClass[]
+  shareTransactions  ShareTransaction[]
+  statements         CorporateStatement[]
+  resolutions        CorporateResolution[]
+  userRoles          UserRole[]
+}
+
+model Shareholder {
+  id            Int                  @id @default(autoincrement())
+  userId        Int
+  type          String               @default("PERSON")
+  displayName   String
+  contactEmail  String?
+  contactPhone  String?
+  notes         String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companies         CompanyShareholder[]
+  shareTransactions ShareTransaction[]
+}
+
+model CompanyShareholder {
+  id             Int          @id @default(autoincrement())
+  companyId      Int
+  shareholderId  Int
+  role           String?
+  votingPercent  Decimal?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+
+}
+
+model ShareClass {
+  id                     Int                 @id @default(autoincrement())
+  companyId              Int
+  code                   String
+  description            String?
+  hasVotingRights        Boolean             @default(true)
+  participatesInGrowth   Boolean             @default(true)
+  dividendPolicy         String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions   ShareTransaction[]
+
+}
+
+model ShareTransaction {
+  id                Int                   @id @default(autoincrement())
+  companyId         Int
+  shareClassId      Int
+  shareholderId     Int
+  type              String
+  transactionDate   DateTime
+  quantity          Decimal
+  pricePerShare     Decimal?
+  considerationPaid Decimal?
+  fairMarketValue   Decimal?
+  notes             String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shareClass  ShareClass  @relation(fields: [shareClassId], references: [id], onDelete: Cascade)
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+}
+
+model CorporateStatement {
+  id               Int                    @id @default(autoincrement())
+  companyId        Int
+  statementType    String
+  periodStart      DateTime
+  periodEnd        DateTime
+  isAudited        Boolean                @default(false)
+  totalAssets      Decimal                @default(0)
+  totalLiabilities Decimal                @default(0)
+  totalEquity      Decimal                @default(0)
+  totalRevenue     Decimal                @default(0)
+  totalExpenses    Decimal                @default(0)
+  netIncome        Decimal                @default(0)
+  metadata         String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  company Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines   CorporateStatementLine[]
+}
+
+model CorporateStatementLine {
+  id          Int                   @id @default(autoincrement())
+  statementId Int
+  category    String
+  label       String
+  amount      Decimal
+  orderIndex  Int                   @default(0)
+  metadata    String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  statement CorporateStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+}
+
+model CorporateResolution {
+  id             Int            @id @default(autoincrement())
+  companyId      Int
+  type           String
+  title          String
+  resolutionDate DateTime
+  body           String?
+  metadata       String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model PropertyUnit {
+  id         Int      @id @default(autoincrement())
+  propertyId Int
+  label      String
+  squareFeet Int?
+  rentExpected Decimal?
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Mortgage {
+  id              Int       @id @default(autoincrement())
+  propertyId      Int
+  lender          String
+  principal       Decimal
+  rateAnnual      Decimal
+  termMonths      Int
+  amortizationMonths Int
+  startDate       DateTime
+  paymentFrequency Int      // nombre de paiements par an
+  paymentAmount   Decimal
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  attachments     Attachment[]
+}
+
+model Revenue {
+  id         Int       @id @default(autoincrement())
+  propertyId Int
+  label      String
+  amount     Decimal
+  frequency  String    @default("MENSUEL")
+  startDate  DateTime
+  endDate    DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id         Int       @id @default(autoincrement())
+  propertyId Int
+  label      String
+  category   String
+  amount     Decimal
+  frequency  String    @default("MENSUEL")
+  startDate  DateTime
+  endDate    DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id          Int           @id @default(autoincrement())
+  propertyId  Int
+  invoiceDate DateTime
+  supplier    String
+  amount       Decimal
+  category    String
+  gst         Decimal?
+  qst         Decimal?
+  description String?
+  status      String        @default("DRAFT")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  property    Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items       InvoiceItem[]
+}
+
+model InvoiceItem {
+  id        Int      @id @default(autoincrement())
+  invoiceId Int
+  label     String
+  amount    Decimal
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model DepreciationSetting {
+  id             Int      @id @default(autoincrement())
+  propertyId     Int      @unique
+  classCode      String
+  ccaRate        Decimal
+  openingUcc     Decimal
+  additions      Decimal
+  dispositions   Decimal
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+
+model Role {
+  id        Int    @id @default(autoincrement())
+  name      String @unique // 'ADMIN', 'COLLAB', 'INVITE'
+  users     UserRole[]
+}
+
+model UserRole {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  roleId    Int
+  companyId Int?
+
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, companyId], name: "userId_roleId_companyId")
+}
+
+model Attachment {
+  id          Int       @id @default(autoincrement())
+  propertyId  Int
+  mortgageId  Int?
+  title       String
+  filename    String
+  contentType String
+  size        Int
+  storagePath String
+  checksum    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  mortgage Mortgage? @relation(fields: [mortgageId], references: [id], onDelete: SetNull)
+}
