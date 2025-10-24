@@ -1,0 +1,30 @@
+# Dépendances et builds
+node_modules/
+dist/
+.prisma/
+
+# Environnements et secrets
+.env
+.env.*
+
+# Données locales / uploads éphémères
+uploads/
+
+# Logs et couvertures
+logs/
+*.log
+coverage/
+
+# Éditeur / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# NPM/Yarn debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Prisma artefacts clients
+prisma/generated/
