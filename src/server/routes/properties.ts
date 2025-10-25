@@ -15,6 +15,8 @@ import {
   deleteAttachmentFile,
   resolveAttachmentPath
 } from '../services/attachmentStorage';
+import { env } from '../env';
+import { extractExpenseFromAttachment } from '../services/attachmentsExtractor';
 
 type DecimalLike = unknown;
 
@@ -778,6 +780,75 @@ propertiesRouter.get(
       const stream = fs.createReadStream(filePath);
       stream.on('error', next);
       stream.pipe(res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+propertiesRouter.post(
+  '/:id/attachments/:attachmentId/extract',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id, attachmentId } = attachmentParamsSchema.parse(req.params);
+
+      const attachment = (await prisma.attachment.findFirst({
+        where: {
+          id: attachmentId,
+          propertyId: id,
+          property: { userId: req.userId }
+        }
+      })) as AttachmentRecord | null;
+
+      if (!attachment) {
+        return res.status(404).json({ error: 'Pièce jointe introuvable.' });
+      }
+
+      if (!env.OPENAI_API_KEY) {
+        return res
+          .status(503)
+          .json({ error: 'Extraction indisponible: configurez OPENAI_API_KEY côté serveur.' });
+      }
+
+      const ct = attachment.contentType || 'application/octet-stream';
+      if (!/^image\//i.test(ct) && !/^application\/(pdf|x-pdf)$/i.test(ct)) {
+        return res
+          .status(415)
+          .json({ error: "Type non supporté pour l'extraction (images ou PDF uniquement)." });
+      }
+
+      const result = await extractExpenseFromAttachment(attachment.storagePath, ct);
+
+      const autoCreateRaw = Array.isArray(req.query.autoCreate)
+        ? req.query.autoCreate[0]
+        : req.query.autoCreate;
+      const normalizedFlag = typeof autoCreateRaw === 'string'
+        ? autoCreateRaw.toLowerCase().trim()
+        : '';
+      const shouldCreate = ['1', 'true', 'yes'].includes(normalizedFlag);
+
+      let createdExpenseId: number | null = null;
+      if (
+        shouldCreate &&
+        result.label &&
+        result.amount > 0 &&
+        /^\d{4}-\d{2}-\d{2}$/.test(result.startDate)
+      ) {
+        const createdExpense = await prisma.expense.create({
+          data: {
+            propertyId: id,
+            label: result.label,
+            category: result.category || 'Autre',
+            amount: result.amount,
+            frequency: 'PONCTUEL',
+            startDate: new Date(result.startDate),
+            endDate: null
+          }
+        });
+        createdExpenseId = createdExpense.id;
+      }
+
+      res.json({ extracted: result, createdExpenseId });
     } catch (error) {
       next(error);
     }

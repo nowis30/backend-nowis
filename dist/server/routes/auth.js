@@ -39,9 +39,32 @@ authRouter.post('/register', async (req, res, next) => {
         if (existing) {
             return res.status(409).json({ error: 'Utilisateur déjà inscrit.' });
         }
-        const passwordHash = await bcrypt_1.default.hash(credentials.password, 12);
-        const user = await prisma_1.prisma.user.create({
-            data: { email: credentials.email, passwordHash }
+        const user = await prisma_1.prisma.$transaction(async (tx) => {
+            const passwordHash = await bcrypt_1.default.hash(credentials.password, 12);
+            const createdUser = await tx.user.create({
+                data: { email: credentials.email, passwordHash }
+            });
+            const adminRole = await tx.role.upsert({
+                where: { name: 'ADMIN' },
+                update: {},
+                create: { name: 'ADMIN' }
+            });
+            await tx.userRole.create({
+                data: {
+                    userId: createdUser.id,
+                    roleId: adminRole.id,
+                    companyId: null
+                }
+            });
+            await tx.shareholder.create({
+                data: {
+                    userId: createdUser.id,
+                    type: 'PERSON',
+                    displayName: 'Profil personnel',
+                    contactEmail: credentials.email
+                }
+            });
+            return createdUser;
         });
         const token = createToken(user.id);
         res.status(201).json({ token });

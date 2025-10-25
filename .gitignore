@@ -6,6 +6,11 @@ dist/
 # Environnements et secrets
 .env
 .env.*
+secrets/**
+secret*/
+openai-key*/
+openai.key
+openai*.key
 
 # Données locales / uploads éphémères
 uploads/
@@ -28,3 +33,6 @@ yarn-error.log*
 
 # Prisma artefacts clients
 prisma/generated/
+
+[Environment]::GetEnvironmentVariable('OPENAI_API_KEY','User')
+[Environment]::GetEnvironmentVariable('ADVISOR_ENGINE','User')

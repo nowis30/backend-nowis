@@ -12,6 +12,7 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default('gpt-4.1'),
   OPENAI_MODEL_CORE: z.string().optional(),
   OPENAI_MODEL_TARGETED: z.string().optional(),
+  OPENAI_MODEL_VISION: z.string().optional(),
   OPENAI_PROVIDER: z.enum(['openai', 'azure']).optional(),
   OPENAI_AZURE_DEPLOYMENT: z.string().optional(),
   OPENAI_API_VERSION: z.string().optional(),

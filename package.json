@@ -35,8 +35,10 @@
     "multer": "^2.0.2",
     "pino": "^9.3.2",
     "pino-http": "^10.2.0",
-    "puppeteer-core": "^23.4.0",
-    "zod": "^3.23.8"
+  "puppeteer-core": "^23.4.0",
+  "zod": "^3.23.8",
+  "@napi-rs/canvas": "^0.1.51",
+  "pdfjs-dist": "^4.7.76"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

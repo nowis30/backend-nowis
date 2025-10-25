@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { env } from '../../env';
 import { determineNextQuestion, parseFacts, describeUncertainFacts } from './parser';
 import type {
@@ -5,7 +6,6 @@ import type {
   AdvisorContext,
   AdvisorExpertId,
   AdvisorMetric,
-  AdvisorModuleOutput,
   AdvisorRecommendation,
   AdvisorResponderId,
   AdvisorResult,

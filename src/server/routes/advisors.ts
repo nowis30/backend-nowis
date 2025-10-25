@@ -8,6 +8,7 @@ import { runAvocatAdvisor } from '../services/advisors/avocat';
 import { runComptableAdvisor } from '../services/advisors/comptable';
 import { runFiscalisteAdvisor } from '../services/advisors/fiscaliste';
 import { askGptExpert, pingOpenAI } from '../services/advisors/gptEngine';
+import { nextConversationStep } from '../services/advisors/convoEngine';
 import { parseFacts } from '../services/advisors/parser';
 import { runPlanificateurAdvisor } from '../services/advisors/planificateur';
 import type {
@@ -112,6 +113,39 @@ router.post('/ask', advisorAccess, async (req, res, next) => {
 
     const fallback = buildHeuristicTargetedAnswer(payload.expertId, payload.question, context);
     res.json(fallback);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Flux conversationnel par spécialiste
+const convoSchema = z
+  .object({
+    expertId: z.enum(['fiscaliste', 'comptable', 'planificateur', 'avocat']),
+    message: z.string().trim().min(1),
+    snapshot: z
+      .object({
+        properties: z
+          .array(
+            z.object({
+              id: z.number().int().optional(),
+              name: z.string().min(1),
+              address: z.string().optional().nullable(),
+              acquisitionDate: z.string().optional().nullable(),
+              currentValue: z.number().optional().nullable()
+            })
+          )
+          .optional()
+      })
+      .default({})
+  })
+  .strict();
+
+router.post('/convo', advisorAccess, async (req, res, next) => {
+  try {
+    const { expertId, message, snapshot } = convoSchema.parse(req.body);
+    const result = await nextConversationStep(expertId, message, snapshot);
+    res.json(result);
   } catch (error) {
     next(error);
   }
