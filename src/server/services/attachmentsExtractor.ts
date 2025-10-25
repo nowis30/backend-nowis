@@ -2,13 +2,9 @@
 import fs from 'node:fs';
 
 import { createCanvas, type Canvas, type SKRSContext2D } from '@napi-rs/canvas';
-import pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
-import pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.js';
 
 import { env } from '../env';
 import { resolveAttachmentPath } from './attachmentStorage';
-
-(pdfjsLib as any).GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 interface CanvasAndContext {
   canvas: Canvas;
@@ -40,9 +36,21 @@ class NodeCanvasFactory {
   }
 }
 
+type PdfJsModule = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+
+let pdfjsLibPromise: Promise<PdfJsModule> | null = null;
+
+async function loadPdfJs(): Promise<PdfJsModule> {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = import('pdfjs-dist/legacy/build/pdf.mjs') as Promise<PdfJsModule>;
+  }
+  return pdfjsLibPromise;
+}
+
 async function renderPdfFirstPageToDataUrl(filePath: string): Promise<string> {
   const buffer = await fs.promises.readFile(filePath);
-  const pdfDocument = await (pdfjsLib as any).getDocument({ data: buffer }).promise;
+  const pdfjsLib = await loadPdfJs();
+  const pdfDocument = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
   if (pdfDocument.numPages < 1) {
     throw new Error('PDF vide: aucune page à analyser.');
   }
