@@ -15,7 +15,8 @@ import type {
 
 type AdvisorResultCore = Omit<AdvisorResult, 'engine'>;
 
-const DEFAULT_MODEL = () => env.OPENAI_MODEL || 'gpt-4.1';
+const CORE_MODEL = () => env.OPENAI_MODEL_CORE || env.OPENAI_MODEL || 'gpt-4.1';
+const TARGETED_MODEL = () => env.OPENAI_MODEL_TARGETED || env.OPENAI_MODEL || 'gpt-4.1';
 const DEFAULT_BASE_URL = () => env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
 const safeStr = (v: any, def = '') => (typeof v === 'string' ? v : def);
@@ -81,7 +82,7 @@ function buildPrompt(context: AdvisorContext): string {
   ].join('\n');
 }
 
-async function callOpenAIJson(prompt: string, signal?: AbortSignal): Promise<any> {
+async function callOpenAIJson(prompt: string, model: string, signal?: AbortSignal): Promise<any> {
   if (!env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY manquant: configurez une clé API pour activer GPT.');
   }
@@ -90,7 +91,7 @@ async function callOpenAIJson(prompt: string, signal?: AbortSignal): Promise<any
   let url: string;
   let headers: Record<string, string>;
   const body = {
-    model: DEFAULT_MODEL(),
+    model,
     messages: [
       { role: 'system', content: 'Tu es un assistant d’entreprise strictement factuel et structuré.' },
       { role: 'user', content: prompt }
@@ -216,7 +217,7 @@ export async function buildGptCore(answers: AdvisorAnswer[]): Promise<AdvisorRes
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const data = await callOpenAIJson(prompt, controller.signal);
+  const data = await callOpenAIJson(prompt, CORE_MODEL(), controller.signal);
     const core = coerceCoreShape(data);
     return {
       ...core,
@@ -332,7 +333,7 @@ export async function askGptExpert(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const data = await callOpenAIJson(prompt, controller.signal);
+    const data = await callOpenAIJson(prompt, TARGETED_MODEL(), controller.signal);
     return coerceTargetedShape(data, responder);
   } finally {
     clearTimeout(timeout);
@@ -349,7 +350,7 @@ export async function pingOpenAI(): Promise<{ ok: boolean; provider: 'openai' | 
     }
     // Envoie une requête minimale qui renvoie un JSON vide
     const prompt = 'Réponds strictement avec ce JSON: {}';
-    await callOpenAIJson(prompt);
+  await callOpenAIJson(prompt, CORE_MODEL());
     return { ok: true, provider };
   } catch (err) {
     return { ok: false, provider: isAzureProvider() ? 'azure' : 'openai', message: err instanceof Error ? err.message : String(err) };
