@@ -1,4 +1,5 @@
-import puppeteer from 'puppeteer';
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 
 import type { CorporateExportCompany, SummaryResponse } from './summaryService';
 import type { AnnualReportData } from './tax/annualReportService';
@@ -813,18 +814,66 @@ function renderAnnualReportHtml(report: AnnualReportData): string {
 }
 
 async function renderPdfFromHtml(html: string): Promise<Buffer> {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  const chromiumArgs = new Set<string>([...chromium.args]);
+  ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-zygote', '--single-process'].forEach((flag) =>
+    chromiumArgs.add(flag)
+  );
+
+  const envExec = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
+  let executablePath = envExec && envExec.length > 0 ? envExec : null;
+
+  if (!executablePath) {
+    try {
+      executablePath = await chromium.executablePath();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[PDF] Impossible de déterminer le chemin Chromium via @sparticuz/chromium', error);
+    }
+  }
+
+  if (!executablePath) {
+    const error = new Error(
+      "Chromium n'est pas disponible dans l'environnement d'exécution. Fournissez PUPPETEER_EXECUTABLE_PATH ou vérifiez votre dépendance @sparticuz/chromium."
+    );
+    // @ts-expect-error ajout d'un status HTTP personnalisé
+    error.status = 500;
+    throw error;
+  }
+
+  const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
+    args: Array.from(chromiumArgs),
+    defaultViewport: chromium.defaultViewport,
+    executablePath,
+    headless: chromium.headless ?? 'new'
+  };
 
   try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const buffer = await page.pdf({ format: 'A4', printBackground: true });
-    return Buffer.from(buffer);
-  } finally {
-    await browser.close();
+    const browser = await puppeteer.launch(launchOptions);
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const buffer = await page.pdf({ format: 'A4', printBackground: true });
+      return Buffer.from(buffer);
+    } finally {
+      await browser.close();
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[PDF] Échec du rendu PDF', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      env: {
+        node: process.version,
+        PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+        PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR || null,
+        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || null
+      },
+      resolvedExecutablePath: executablePath
+    });
+    const error = new Error('La génération du PDF a échoué. Voir les logs du serveur pour le détail.');
+    // @ts-expect-error attacher un status au besoin
+    error.status = 500;
+    throw error;
   }
 }
 
