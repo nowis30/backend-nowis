@@ -11,6 +11,8 @@ import { rolesRouter } from './roles';
 import { userRolesRouter } from './userRoles';
 import { usersRouter } from './users';
 import { reportsRouter } from './reports';
+import { dividendsRouter } from './dividends';
+import { taxRouter } from './tax';
 
 const routes = Router();
 
@@ -25,5 +27,7 @@ routes.use('/roles', rolesRouter);
 routes.use('/userRoles', userRolesRouter);
 routes.use('/users', usersRouter);
 routes.use('/reports', reportsRouter);
+routes.use('/corporate', dividendsRouter);
+routes.use('/tax', taxRouter);
 
 export { routes };

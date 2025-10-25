@@ -33,6 +33,11 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
+// Alias pratique: certaines intégrations testent /api/health
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
+});
+
 app.use(errorHandler);
 
 export { app };

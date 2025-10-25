@@ -19,8 +19,14 @@ const passwordSchema = zod_1.z
     .regex(/[a-z]/, 'Inclure au moins une lettre minuscule.')
     .regex(/[0-9]/, 'Inclure au moins un chiffre.')
     .regex(/[^A-Za-z0-9]/, 'Inclure au moins un caractère spécial.');
+// Accepte les emails standards et les domaines internes (.local) utilisés par le seed
+const emailSchema = zod_1.z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((value) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value) || /@[^@\s]+\.local$/i.test(value), { message: 'Email invalide.' });
 const credentialsSchema = zod_1.z.object({
-    email: zod_1.z.string().email(),
+    email: emailSchema,
     password: passwordSchema
 });
 function createToken(userId) {

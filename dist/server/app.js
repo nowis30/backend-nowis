@@ -13,6 +13,10 @@ const index_1 = require("./routes/index");
 const errorHandler_1 = require("./middlewares/errorHandler");
 const app = (0, express_1.default)();
 exports.app = app;
+// Derrière le proxy de Render/Cloudflare, il faut activer "trust proxy"
+// pour que express-rate-limit et les IP clientes fonctionnent correctement.
+// Voir: https://express-rate-limit.github.io/ERR_ERL_UNEXPECTED_X_FORWARDED_FOR/
+app.set('trust proxy', 1);
 const apiLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     max: 300,
@@ -26,6 +30,10 @@ app.use(express_1.default.json());
 app.use((0, pino_http_1.default)());
 app.use('/api', apiLimiter, index_1.routes);
 app.get('/health', (_req, res) => {
+    res.json({ status: 'ok' });
+});
+// Alias pratique: certaines intégrations testent /api/health
+app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' });
 });
 app.use(errorHandler_1.errorHandler);

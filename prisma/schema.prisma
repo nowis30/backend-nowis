@@ -61,6 +61,10 @@ model Company {
   statements         CorporateStatement[]
   resolutions        CorporateResolution[]
   userRoles          UserRole[]
+  dividends          DividendDeclaration[]
+  returnsOfCapital   ReturnOfCapitalRecord[]
+  shareholderLoans   ShareholderLoan[]
+  corporateTaxReturns CorporateTaxReturn[]
 }
 
 model Shareholder {
@@ -77,6 +81,10 @@ model Shareholder {
   user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   companies         CompanyShareholder[]
   shareTransactions ShareTransaction[]
+  dividends         DividendDeclaration[]
+  returnsOfCapital  ReturnOfCapitalRecord[]
+  shareholderLoans  ShareholderLoan[]
+  personalTaxReturns PersonalTaxReturn[]
 }
 
 model CompanyShareholder {
@@ -106,6 +114,8 @@ model ShareClass {
 
   company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   transactions   ShareTransaction[]
+  dividends      DividendDeclaration[]
+  returnsOfCapital ReturnOfCapitalRecord[]
 
 }
 
@@ -176,6 +186,131 @@ model CorporateResolution {
   updatedAt      DateTime       @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+enum DividendType {
+  ELIGIBLE
+  NON_ELIGIBLE
+}
+
+model DividendDeclaration {
+  id               Int            @id @default(autoincrement())
+  companyId        Int
+  shareholderId    Int
+  shareClassId     Int?
+  declarationDate  DateTime
+  recordDate       DateTime?
+  paymentDate      DateTime?
+  amount           Decimal
+  dividendType     DividendType
+  grossUpRate      Decimal         @default(0)
+  grossedAmount    Decimal         @default(0)
+  federalCredit    Decimal         @default(0)
+  provincialCredit Decimal         @default(0)
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  shareClass  ShareClass? @relation(fields: [shareClassId], references: [id], onDelete: SetNull)
+}
+
+model ReturnOfCapitalRecord {
+  id              Int            @id @default(autoincrement())
+  companyId       Int
+  shareholderId   Int
+  shareClassId    Int?
+  transactionDate DateTime
+  amount          Decimal
+  previousAcb     Decimal?
+  newAcb          Decimal?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  shareClass  ShareClass? @relation(fields: [shareClassId], references: [id], onDelete: SetNull)
+}
+
+model ShareholderLoan {
+  id             Int                         @id @default(autoincrement())
+  companyId      Int
+  shareholderId  Int
+  issuedDate     DateTime
+  principal      Decimal
+  interestRate   Decimal
+  interestMethod String                     @default("SIMPLE")
+  dueDate        DateTime?
+  notes          String?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  payments    ShareholderLoanPayment[]
+}
+
+model ShareholderLoanPayment {
+  id           Int             @id @default(autoincrement())
+  loanId       Int
+  paymentDate  DateTime
+  principalPaid Decimal        @default(0)
+  interestPaid Decimal         @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  loan ShareholderLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model CorporateTaxReturn {
+  id                    Int       @id @default(autoincrement())
+  companyId             Int
+  fiscalYearEnd         DateTime
+  netIncome             Decimal   @default(0)
+  taxableIncome         Decimal   @default(0)
+  smallBusinessDeduction Decimal  @default(0)
+  federalTax            Decimal   @default(0)
+  provincialTax         Decimal   @default(0)
+  rdtohOpening          Decimal   @default(0)
+  rdtohClosing          Decimal   @default(0)
+  gripOpening           Decimal   @default(0)
+  gripClosing           Decimal   @default(0)
+  cdaOpening            Decimal   @default(0)
+  cdaClosing            Decimal   @default(0)
+  refunds               Decimal   @default(0)
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, fiscalYearEnd])
+}
+
+model PersonalTaxReturn {
+  id                       Int       @id @default(autoincrement())
+  shareholderId            Int
+  taxYear                  Int
+  employmentIncome         Decimal   @default(0)
+  businessIncome           Decimal   @default(0)
+  eligibleDividends        Decimal   @default(0)
+  nonEligibleDividends     Decimal   @default(0)
+  capitalGains             Decimal   @default(0)
+  deductions               Decimal   @default(0)
+  otherCredits             Decimal   @default(0)
+  taxableIncome            Decimal   @default(0)
+  federalTax               Decimal   @default(0)
+  provincialTax            Decimal   @default(0)
+  totalCredits             Decimal   @default(0)
+  balanceDue               Decimal   @default(0)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+
+  @@unique([shareholderId, taxYear])
 }
 
 model PropertyUnit {

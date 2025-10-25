@@ -407,6 +407,169 @@ async function main() {
             }
         });
     }
+    const dividendDeclarationDate = new Date('2024-12-31');
+    const existingDividend = await prisma_1.prisma.dividendDeclaration.findFirst({
+        where: {
+            companyId: company.id,
+            shareholderId: primaryShareholder.id,
+            declarationDate: dividendDeclarationDate
+        }
+    });
+    if (!existingDividend) {
+        await prisma_1.prisma.dividendDeclaration.create({
+            data: {
+                companyId: company.id,
+                shareholderId: primaryShareholder.id,
+                shareClassId: classA.id,
+                declarationDate: dividendDeclarationDate,
+                recordDate: new Date('2025-01-10'),
+                paymentDate: new Date('2025-01-31'),
+                amount: 25000,
+                dividendType: 'ELIGIBLE',
+                grossUpRate: 0.38,
+                grossedAmount: 34500,
+                federalCredit: 5175,
+                provincialCredit: 4105,
+                notes: 'Dividende annuel attribué à l’actionnaire principal.'
+            }
+        });
+    }
+    const rocDate = new Date('2024-11-15');
+    const existingRoc = await prisma_1.prisma.returnOfCapitalRecord.findFirst({
+        where: {
+            companyId: company.id,
+            shareholderId: holdingShareholder.id,
+            transactionDate: rocDate
+        }
+    });
+    if (!existingRoc) {
+        await prisma_1.prisma.returnOfCapitalRecord.create({
+            data: {
+                companyId: company.id,
+                shareholderId: holdingShareholder.id,
+                shareClassId: classPref.id,
+                transactionDate: rocDate,
+                amount: 10000,
+                previousAcb: 50000,
+                newAcb: 40000,
+                notes: 'Retour de capital pour ajuster le gel successoral.'
+            }
+        });
+    }
+    const shareholderLoan = await prisma_1.prisma.shareholderLoan.findFirst({
+        where: {
+            companyId: company.id,
+            shareholderId: primaryShareholder.id
+        }
+    });
+    if (!shareholderLoan) {
+        const loan = await prisma_1.prisma.shareholderLoan.create({
+            data: {
+                companyId: company.id,
+                shareholderId: primaryShareholder.id,
+                issuedDate: new Date('2024-03-01'),
+                principal: 50000,
+                interestRate: 0.05,
+                interestMethod: 'SIMPLE',
+                dueDate: new Date('2025-03-01'),
+                notes: 'Avance à l’actionnaire pour rénover l’immeuble locatif.'
+            }
+        });
+        await prisma_1.prisma.shareholderLoanPayment.createMany({
+            data: [
+                {
+                    loanId: loan.id,
+                    paymentDate: new Date('2024-09-01'),
+                    principalPaid: 10000,
+                    interestPaid: 1200
+                },
+                {
+                    loanId: loan.id,
+                    paymentDate: new Date('2025-02-28'),
+                    principalPaid: 40000,
+                    interestPaid: 1000
+                }
+            ]
+        });
+    }
+    await prisma_1.prisma.corporateTaxReturn.upsert({
+        where: {
+            companyId_fiscalYearEnd: {
+                companyId: company.id,
+                fiscalYearEnd: new Date('2024-12-31')
+            }
+        },
+        create: {
+            companyId: company.id,
+            fiscalYearEnd: new Date('2024-12-31'),
+            netIncome: 100000,
+            taxableIncome: 95000,
+            smallBusinessDeduction: 9000,
+            federalTax: 11000,
+            provincialTax: 9000,
+            rdtohOpening: 8000,
+            rdtohClosing: 5000,
+            gripOpening: 12000,
+            gripClosing: 16000,
+            cdaOpening: 6000,
+            cdaClosing: 8500,
+            refunds: 3000,
+            notes: 'Simulation fiscale corporative pour la phase 3.'
+        },
+        update: {
+            netIncome: 100000,
+            taxableIncome: 95000,
+            smallBusinessDeduction: 9000,
+            federalTax: 11000,
+            provincialTax: 9000,
+            rdtohOpening: 8000,
+            rdtohClosing: 5000,
+            gripOpening: 12000,
+            gripClosing: 16000,
+            cdaOpening: 6000,
+            cdaClosing: 8500,
+            refunds: 3000,
+            notes: 'Simulation fiscale corporative pour la phase 3.'
+        }
+    });
+    await prisma_1.prisma.personalTaxReturn.upsert({
+        where: {
+            shareholderId_taxYear: {
+                shareholderId: primaryShareholder.id,
+                taxYear: 2024
+            }
+        },
+        create: {
+            shareholderId: primaryShareholder.id,
+            taxYear: 2024,
+            employmentIncome: 90000,
+            businessIncome: 15000,
+            eligibleDividends: 25000,
+            nonEligibleDividends: 0,
+            capitalGains: 12000,
+            deductions: 10000,
+            otherCredits: 2000,
+            taxableIncome: 132000,
+            federalTax: 27000,
+            provincialTax: 18500,
+            totalCredits: 8000,
+            balanceDue: 37500
+        },
+        update: {
+            employmentIncome: 90000,
+            businessIncome: 15000,
+            eligibleDividends: 25000,
+            nonEligibleDividends: 0,
+            capitalGains: 12000,
+            deductions: 10000,
+            otherCredits: 2000,
+            taxableIncome: 132000,
+            federalTax: 27000,
+            provincialTax: 18500,
+            totalCredits: 8000,
+            balanceDue: 37500
+        }
+    });
     console.log(`Utilisateur seedé : ${user.email}`);
 }
 main()
