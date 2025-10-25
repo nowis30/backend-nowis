@@ -96,7 +96,6 @@ async function callOpenAIJson(prompt: string, model: string, signal?: AbortSigna
       { role: 'system', content: 'Tu es un assistant d’entreprise strictement factuel et structuré.' },
       { role: 'user', content: prompt }
     ],
-    temperature: 0.2 as number,
     response_format: { type: 'json_object' as const }
   };
 

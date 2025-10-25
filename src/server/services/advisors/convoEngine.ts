@@ -78,7 +78,6 @@ async function callOpenAIJson(prompt: string, signal?: AbortSignal): Promise<any
       { role: 'system', content: 'Tu es un spécialiste qui mène un entretien et renvoie STRICTEMENT du JSON valide.' },
       { role: 'user', content: prompt }
     ],
-    temperature: 0.2 as number,
     response_format: { type: 'json_object' as const }
   };
 
