@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 
-import { authenticated } from '../middlewares/authenticated';
+import { advisorAccess } from '../middlewares/advisorAccess';
 import { evaluateAdvisors, getAdvisorQuestions } from '../services/advisors/coordinator';
 import { pingOpenAI } from '../services/advisors/gptEngine';
 import type { AdvisorAnswer, AdvisorEngineName } from '../services/advisors/types';
@@ -31,9 +31,7 @@ router.get('/health', async (_req, res) => {
   }
 });
 
-router.use(authenticated);
-
-router.get('/questions', (_req, res) => {
+router.get('/questions', advisorAccess, (_req, res) => {
   res.json({ questions: getAdvisorQuestions() });
 });
 
@@ -47,7 +45,7 @@ function parseEngineFromRequest(req: Request): AdvisorEngineName | undefined {
   return undefined;
 }
 
-router.post('/evaluate', async (req, res, next) => {
+router.post('/evaluate', advisorAccess, async (req, res, next) => {
   try {
     const payload = answersSchema.parse(req.body);
     const answers = payload.answers as AdvisorAnswer[];

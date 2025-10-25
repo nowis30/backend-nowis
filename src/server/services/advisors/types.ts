@@ -35,10 +35,12 @@ export interface AdvisorFacts {
   taxableIncome: number | null;
   profitMargin: number | null;
   province: string | null;
-  hasHoldingCompany: boolean;
-  dividendIntent: 'NONE' | 'LOW' | 'HIGH';
-  liquidityGoal: 'STABILITY' | 'GROWTH' | 'WITHDRAWAL';
-  legalConcern: 'NONE' | 'SUCCESSION' | 'LITIGATION';
+  hasHoldingCompany: boolean | null;
+  dividendIntent: 'NONE' | 'LOW' | 'HIGH' | 'UNKNOWN';
+  liquidityGoal: 'STABILITY' | 'GROWTH' | 'WITHDRAWAL' | 'UNKNOWN';
+  legalConcern: 'NONE' | 'SUCCESSION' | 'LITIGATION' | 'UNKNOWN';
+  assetProfile: 'NONE' | 'SALARIED_ONLY' | 'JOB_AND_PROPERTIES' | 'BUSINESS' | 'BUSINESS_AND_PROPERTIES' | 'UNKNOWN';
+  uncertain: Record<string, boolean>;
 }
 
 export interface AdvisorMetric {

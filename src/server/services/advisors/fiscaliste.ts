@@ -2,8 +2,65 @@ import { AdvisorContext, AdvisorMetric, AdvisorModuleOutput } from './types';
 
 export function runFiscalisteAdvisor(context: AdvisorContext): AdvisorModuleOutput {
   const { parsed } = context;
-  const income = parsed.taxableIncome ?? 0;
-  const profitMargin = parsed.profitMargin ?? 0;
+  const incomeKnown = typeof parsed.taxableIncome === 'number';
+  const income = incomeKnown ? parsed.taxableIncome! : 0;
+  const marginKnown = typeof parsed.profitMargin === 'number';
+  const profitMargin = marginKnown ? parsed.profitMargin! : 0;
+  const profile = parsed.assetProfile === 'UNKNOWN' ? null : parsed.assetProfile;
+  const hasHolding = parsed.hasHoldingCompany === true;
+  const holdingUnknown = parsed.hasHoldingCompany === null;
+
+  if (profile === 'NONE') {
+    return {
+      recommendation: {
+        expertId: 'fiscaliste',
+        title: 'Préparer le terrain fiscal',
+        summary:
+          "Aucun revenu imposable ni actif corporatif pour l’instant : concentrez-vous sur la mise en place de la structure avant d’engendrer des revenus.",
+        rationale: [
+          'Valider le choix de la province d’incorporation et des actionnaires avant le démarrage.',
+          'Préparer un budget de démarrage afin de savoir quand la déduction pour petites entreprises deviendra pertinente.'
+        ]
+      },
+      metrics: [
+        {
+          id: 'currentTaxExposure',
+          label: 'Revenu imposable actuel',
+          value: '0 $',
+          explanation: "Aucun revenu déclaré : les recommandations seront activées dès que des entrées seront prévues.",
+          expertIds: ['fiscaliste']
+        }
+      ],
+      followUps: [
+        'Mettre en place un calendrier des premières obligations fiscales (TPS/TVQ, acomptes provisionnels, DAS).'
+      ]
+    };
+  }
+
+  if (!incomeKnown) {
+    return {
+      recommendation: {
+        expertId: 'fiscaliste',
+        title: 'Estimer le revenu imposable',
+        summary:
+          "Le revenu imposable n’est pas connu : établissez une projection pour déterminer vos acomptes et l'admissibilité à la SBD.",
+        rationale: [
+          'Prévoir un budget de ventes et de dépenses pour calculer un revenu imposable prévisionnel.',
+          'Identifier les seuils fiscaux (SBD, cotisations) qui s’appliqueront selon la projection.'
+        ]
+      },
+      metrics: [
+        {
+          id: 'taxableIncomeStatus',
+          label: 'Revenu imposable estimé',
+          value: 'Inconnu',
+          explanation: 'Aucune estimation fournie — la prochaine étape est de bâtir une projection annuelle.',
+          expertIds: ['fiscaliste']
+        }
+      ],
+      followUps: ['Préparer un état des résultats prévisionnel sur 12 mois pour verrouiller la stratégie fiscale.']
+    };
+  }
 
   const smallBusinessLimit = parsed.province === 'QC' ? 500_000 : 500_000;
   const thresholdExceeded = income > smallBusinessLimit;
@@ -34,6 +91,16 @@ export function runFiscalisteAdvisor(context: AdvisorContext): AdvisorModuleOutp
     }
   ];
 
+  if (!marginKnown) {
+    metrics.push({
+      id: 'profitMarginStatus',
+      label: 'Marge nette',
+      value: 'À confirmer',
+      explanation: 'La marge bénéficiaire estimée est inconnue — validez vos coûts pour affiner la stratégie de rémunération.',
+      expertIds: ['fiscaliste', 'comptable']
+    });
+  }
+
   const rationale: string[] = [];
 
   if (thresholdExceeded) {
@@ -56,8 +123,12 @@ export function runFiscalisteAdvisor(context: AdvisorContext): AdvisorModuleOutp
     );
   }
 
+  if (!marginKnown) {
+    rationale.push('Confirmer la marge nette afin de valider le choix salaire/dividende.');
+  }
+
   const followUps: string[] = [];
-  if (!parsed.hasHoldingCompany && thresholdExceeded) {
+  if (!hasHolding && thresholdExceeded) {
     followUps.push("Valider la création d’une holding pour gérer l’excès de liquidités et protéger l’admissibilité à la SBD.");
   }
 
@@ -65,6 +136,22 @@ export function runFiscalisteAdvisor(context: AdvisorContext): AdvisorModuleOutp
     followUps.push(
       "Réviser la convention unanime pour documenter la politique de dividendes et préparer les feuillets T5/RL-3."
     );
+  }
+
+  if (parsed.dividendIntent === 'UNKNOWN') {
+    followUps.push('Clarifier la politique de dividendes pour optimiser la combinaison salaire/dividende.');
+  }
+
+  if (holdingUnknown) {
+    followUps.push('Confirmer si une société de gestion existe afin d’ajuster la stratégie fiscale.');
+  }
+
+  if (profile === 'JOB_AND_PROPERTIES' || profile === 'BUSINESS_AND_PROPERTIES') {
+    followUps.push('Analyser la répartition revenus locatifs vs. revenus actifs pour protéger la déduction pour petites entreprises.');
+  }
+
+  if (profile === 'SALARIED_ONLY') {
+    followUps.push('Comparer la rémunération salariale actuelle avec un éventuel transfert d’actifs dans une holding personnelle.');
   }
 
   return {

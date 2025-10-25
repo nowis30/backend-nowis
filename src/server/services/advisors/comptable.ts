@@ -8,13 +8,41 @@ function computeWorkingCapitalCoverage(income: number, margin: number): number {
 }
 
 export function runComptableAdvisor(context: AdvisorContext): AdvisorModuleOutput {
-  const income = context.parsed.taxableIncome ?? 0;
-  const margin = context.parsed.profitMargin ?? 0;
+  const incomeValue = context.parsed.taxableIncome;
+  const marginValue = context.parsed.profitMargin;
+  const incomeKnown = typeof incomeValue === 'number' && incomeValue > 0;
+  const marginKnown = typeof marginValue === 'number' && marginValue > 0;
+  const profile = context.parsed.assetProfile === 'UNKNOWN' ? null : context.parsed.assetProfile;
 
-  const coverage = computeWorkingCapitalCoverage(income, margin);
+  if (profile === 'NONE' || !incomeKnown) {
+    return {
+      recommendation: {
+        expertId: 'comptable',
+        title: 'Mettre en place les fondations comptables',
+        summary:
+          'Aucune donnée financière active détectée : mettez sur pied un plan comptable et un suivi de caisse avant le démarrage.',
+        rationale: [
+          'Choisir un logiciel comptable et définir les catégories de dépenses dès maintenant évitera les rattrapages coûteux.',
+          'Élaborer un budget prévisionnel pour savoir quand l’entreprise atteindra le seuil de rentabilité.'
+        ]
+      },
+      metrics: [
+        {
+          id: 'bookkeepingReadiness',
+          label: 'Préparation des registres',
+          value: 'À configurer',
+          explanation: 'Aucun flux comptable à analyser — configurez la comptabilité et un tableau de bord minimal avant les premières ventes.',
+          expertIds: ['comptable']
+        }
+      ],
+      followUps: ['Mettre en place un compte professionnel distinct et une procédure simple de conservation des reçus.']
+    };
+  }
+
+  const coverage = computeWorkingCapitalCoverage(incomeValue!, marginKnown ? marginValue! : 0.2);
   const healthyCoverage = coverage >= 6 ? 'Solide' : coverage >= 3 ? 'Intermédiaire' : 'À renforcer';
 
-  const optimalRemuneration = Math.min(income * 0.35, 120_000);
+  const optimalRemuneration = Math.min(incomeValue! * 0.35, 120_000);
 
   const metrics: AdvisorMetric[] = [
     {
@@ -35,6 +63,16 @@ export function runComptableAdvisor(context: AdvisorContext): AdvisorModuleOutpu
     }
   ];
 
+  if (!marginKnown) {
+    metrics.push({
+      id: 'profitMarginInsight',
+      label: 'Marge nette',
+      value: 'À valider',
+      explanation: 'La marge nette n’a pas été fournie — ajustez vos projections pour obtenir un ratio précis.',
+      expertIds: ['comptable']
+    });
+  }
+
   const rationale: string[] = [];
   if (coverage < 3) {
     rationale.push(
@@ -44,15 +82,27 @@ export function runComptableAdvisor(context: AdvisorContext): AdvisorModuleOutpu
     rationale.push('La trésorerie couvre plusieurs mois : possibilité de planifier un réinvestissement stratégique.');
   }
 
-  if (margin < 0.15) {
+  if (marginKnown && marginValue! < 0.15) {
     rationale.push("La marge est inférieure à 15 % : investiguer les postes de dépenses et revoir la tarification.");
   } else {
     rationale.push('La marge est satisfaisante : maintenir les contrôles budgétaires actuels et les flux de projection.');
   }
 
+  if (!marginKnown) {
+    rationale.push('Obtenir une marge nette estimée pour affiner les projections de trésorerie.');
+  }
+
   const followUps: string[] = [];
   if (coverage < 6) {
     followUps.push('Préparer un budget de trésorerie mensuel sur 12 mois pour surveiller l’amélioration de la couverture.');
+  }
+
+  if (profile === 'JOB_AND_PROPERTIES' || profile === 'BUSINESS_AND_PROPERTIES') {
+    followUps.push('Créer un suivi distinct des immeubles (revenus/charges par adresse) pour faciliter les déclarations et la gestion de flux.');
+  }
+
+  if (!marginKnown) {
+    followUps.push('Collecter les états financiers récents pour calculer la marge nette.');
   }
 
   return {
