@@ -13,6 +13,7 @@ import { usersRouter } from './users';
 import { reportsRouter } from './reports';
 import { dividendsRouter } from './dividends';
 import { taxRouter } from './tax';
+import { advisorsRouter } from './advisors';
 
 const routes = Router();
 
@@ -29,5 +30,6 @@ routes.use('/users', usersRouter);
 routes.use('/reports', reportsRouter);
 routes.use('/corporate', dividendsRouter);
 routes.use('/tax', taxRouter);
+routes.use('/advisors', advisorsRouter);
 
 export { routes };

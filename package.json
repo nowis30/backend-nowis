@@ -13,6 +13,7 @@
     "render-build": "prisma generate && npm run build",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "jest",
+  "smoke:gpt": "ts-node ./src/scripts/smoke-gpt.ts",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",
+    "@sparticuz/chromium": "^133.0.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -33,7 +35,7 @@
     "multer": "^2.0.2",
     "pino": "^9.3.2",
     "pino-http": "^10.2.0",
-    "puppeteer": "^23.4.0",
+    "puppeteer-core": "^23.4.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
