@@ -32,6 +32,24 @@ function normalizeOpenAIBaseUrl(base: string): string {
 
 function buildPrompt(context: AdvisorContext): string {
   const facts = context.parsed;
+  const uncertainFields = Object.entries(facts.uncertain)
+    .filter(([, flagged]) => Boolean(flagged))
+    .map(([field]) => field)
+    .sort();
+
+  const payload = {
+    assetProfile: facts.assetProfile,
+    taxableIncome: facts.taxableIncome,
+    profitMarginRatio: facts.profitMargin,
+    profitMarginPercent: facts.profitMargin != null ? facts.profitMargin * 100 : null,
+    province: facts.province,
+    hasHoldingCompany: facts.hasHoldingCompany,
+    dividendIntent: facts.dividendIntent,
+    liquidityGoal: facts.liquidityGoal,
+    legalConcern: facts.legalConcern,
+    uncertainFields
+  };
+
   return [
     'Tu es un comité d’experts (fiscaliste, comptable, planificateur financier, avocat corporatif).',
     'À partir des faits fournis, produis un diagnostic final et des recommandations concrètes.',
@@ -39,24 +57,14 @@ function buildPrompt(context: AdvisorContext): string {
     '- Réponds STRICTEMENT en JSON valide selon le schéma demandé.',
     '- Utilise des identifiants d’experts exactement: ["fiscaliste","comptable","planificateur","avocat"].',
     '- Mets au moins 4 métriques totales (fusionnées si nécessaire) et 1 suivi.',
+    '- Ne comble jamais les données manquantes : si un champ est null ou listé dans "uncertainFields", mentionne l’incertitude dans ton analyse et propose des validations concrètes.',
+    '- Ajuste les recommandations selon le profil d’actifs et souligne les hypothèses lorsque l’information est approximative.',
     '',
     'Schéma JSON attendu (ne fournis rien d’autre):',
     '{\n  "nextQuestion": null,\n  "completed": true,\n  "coordinatorSummary": string,\n  "recommendations": [\n    { "expertId": string, "title": string, "summary": string, "rationale": string[] }\n  ],\n  "metrics": [\n    { "id": string, "label": string, "value": string, "explanation": string, "expertIds": string[] }\n  ],\n  "followUps": string[]\n}',
     '',
-    'Faits:',
-    JSON.stringify(
-      {
-        taxableIncome: facts.taxableIncome,
-        profitMargin: facts.profitMargin,
-        province: facts.province,
-        hasHoldingCompany: facts.hasHoldingCompany,
-        dividendIntent: facts.dividendIntent,
-        liquidityGoal: facts.liquidityGoal,
-        legalConcern: facts.legalConcern
-      },
-      null,
-      2
-    )
+    'Faits structurés:',
+    JSON.stringify(payload, null, 2)
   ].join('\n');
 }
 
