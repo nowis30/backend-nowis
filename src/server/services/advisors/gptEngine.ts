@@ -1,5 +1,5 @@
 import { env } from '../../env';
-import { describeUncertainFacts, determineNextQuestion, parseFacts } from './parser';
+import { determineNextQuestion, parseFacts, describeUncertainFacts } from './parser';
 import type {
   AdvisorAnswer,
   AdvisorContext,
@@ -7,14 +7,26 @@ import type {
   AdvisorMetric,
   AdvisorModuleOutput,
   AdvisorRecommendation,
+  AdvisorResponderId,
   AdvisorResult,
-  AdvisorUncertaintyField
+  AdvisorTargetedAnswer,
+  AdvisorUncertaintyField,
 } from './types';
 
 type AdvisorResultCore = Omit<AdvisorResult, 'engine'>;
 
 const DEFAULT_MODEL = () => env.OPENAI_MODEL || 'gpt-4.1';
 const DEFAULT_BASE_URL = () => env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+
+const safeStr = (v: any, def = '') => (typeof v === 'string' ? v : def);
+const safeBool = (v: any, def = false) => (typeof v === 'boolean' ? v : def);
+const safeArray = (v: any) => (Array.isArray(v) ? v : []);
+const toExpertId = (v: any): AdvisorExpertId | null => {
+  const value = safeStr(v);
+  return value === 'fiscaliste' || value === 'comptable' || value === 'planificateur' || value === 'avocat'
+    ? (value as AdvisorExpertId)
+    : null;
+};
 
 function isAzureProvider(): boolean {
   if (env.OPENAI_PROVIDER === 'azure') return true;
@@ -132,13 +144,6 @@ async function callOpenAIJson(prompt: string, signal?: AbortSignal): Promise<any
 }
 
 function coerceCoreShape(data: any): AdvisorResultCore {
-  const safeStr = (v: any, def = '') => (typeof v === 'string' ? v : def);
-  const safeBool = (v: any, def = false) => (typeof v === 'boolean' ? v : def);
-  const safeArray = (v: any) => (Array.isArray(v) ? v : []);
-  const toExpertId = (v: any): AdvisorExpertId | null => {
-    const s = safeStr(v);
-    return s === 'fiscaliste' || s === 'comptable' || s === 'planificateur' || s === 'avocat' ? (s as AdvisorExpertId) : null;
-  };
   const recs = safeArray(data.recommendations)
     .map((r: any): AdvisorRecommendation | null => {
       const expertId = toExpertId(r?.expertId);
@@ -239,6 +244,96 @@ export async function buildGptCore(answers: AdvisorAnswer[]): Promise<AdvisorRes
       followUps: [],
       uncertainty
     };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildTargetedPrompt(
+  responder: AdvisorResponderId,
+  question: string,
+  context: AdvisorContext
+): string {
+  const facts = context.parsed;
+  const uncertainFields = describeUncertainFacts(context.answers, facts.uncertain);
+
+  const payload = {
+    responder,
+    question,
+    facts: {
+      assetProfile: facts.assetProfile,
+      taxableIncome: facts.taxableIncome,
+      profitMarginRatio: facts.profitMargin,
+      profitMarginPercent: facts.profitMargin != null ? facts.profitMargin * 100 : null,
+      province: facts.province,
+      hasHoldingCompany: facts.hasHoldingCompany,
+      dividendIntent: facts.dividendIntent,
+      liquidityGoal: facts.liquidityGoal,
+      legalConcern: facts.legalConcern
+    },
+    uncertainFields: uncertainFields.map((item) => ({
+      id: item.questionId,
+      label: item.label,
+      description: item.description
+    }))
+  };
+
+  const persona =
+    responder === 'group'
+      ? 'Tu es le coordinateur du comité IA (fiscaliste, comptable, planificateur financier, avocat corporatif).'
+      : `Tu es ${responder}, membre du comité IA.`;
+
+  return [
+    persona,
+    'Réponds en français, de façon structurée et concrète.',
+    'Contraintes:',
+    '- Réponds STRICTEMENT au format JSON valide selon le schéma indiqué.',
+    '- Ne fais pas de suppositions : si une donnée est inconnue ou incertaine, mentionne-le explicitement et suggère la validation.',
+    '- Utilise les informations factuelles fournies sans en inventer de nouvelles.',
+    '',
+    'Schéma JSON attendu (ne fournis rien d’autre):',
+    '{\n  "answer": string,\n  "keyPoints": string[],\n  "followUps": string[]\n}',
+    '',
+    'Contexte structuré:',
+    JSON.stringify(payload, null, 2)
+  ].join('\n');
+}
+
+function coerceTargetedShape(data: any, responder: AdvisorResponderId): AdvisorTargetedAnswer {
+  const answer = safeStr(data?.answer);
+  const keyPoints = safeArray(data?.keyPoints).map((item) => safeStr(item)).filter(Boolean);
+  const followUps = safeArray(data?.followUps).map((item) => safeStr(item)).filter(Boolean);
+
+  return {
+    expertId: responder,
+    answer: answer ||
+      (responder === 'group'
+        ? 'Le comité IA ne peut pas formuler de réponse détaillée pour le moment.'
+        : `Le ${responder} ne peut pas formuler de réponse détaillée pour le moment.`),
+    keyPoints,
+    followUps,
+    metrics: [],
+    engine: {
+      mode: 'gpt',
+      note:
+        responder === 'group'
+          ? 'Réponse générée par GPT pour le comité d’experts.'
+          : `Réponse générée par GPT pour ${responder}.`
+    }
+  };
+}
+
+export async function askGptExpert(
+  responder: AdvisorResponderId,
+  question: string,
+  context: AdvisorContext
+): Promise<AdvisorTargetedAnswer> {
+  const prompt = buildTargetedPrompt(responder, question, context);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const data = await callOpenAIJson(prompt, controller.signal);
+    return coerceTargetedShape(data, responder);
   } finally {
     clearTimeout(timeout);
   }

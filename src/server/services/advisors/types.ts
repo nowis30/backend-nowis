@@ -1,4 +1,5 @@
 export type AdvisorExpertId = 'fiscaliste' | 'comptable' | 'planificateur' | 'avocat';
+export type AdvisorResponderId = AdvisorExpertId | 'group';
 
 export interface AdvisorQuestionOption {
   value: string;
@@ -81,6 +82,18 @@ export interface AdvisorResult {
   engine: {
     mode: AdvisorEngineName;
     isSimulated: boolean;
+    note?: string;
+  };
+}
+
+export interface AdvisorTargetedAnswer {
+  expertId: AdvisorResponderId;
+  answer: string;
+  keyPoints: string[];
+  followUps: string[];
+  metrics: AdvisorMetric[];
+  engine: {
+    mode: AdvisorEngineName;
     note?: string;
   };
 }
