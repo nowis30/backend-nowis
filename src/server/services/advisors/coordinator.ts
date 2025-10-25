@@ -1,5 +1,5 @@
 import { env } from '../../env';
-import { determineNextQuestion, listAdvisorQuestions, parseFacts } from './parser';
+import { describeUncertainFacts, determineNextQuestion, listAdvisorQuestions, parseFacts } from './parser';
 import { runAvocatAdvisor } from './avocat';
 import { runComptableAdvisor } from './comptable';
 import { runFiscalisteAdvisor } from './fiscaliste';
@@ -85,6 +85,8 @@ function buildHeuristicCore(answers: AdvisorAnswer[]): AdvisorResultCore {
     parsed: parseFacts(answers)
   };
 
+  const uncertainty = describeUncertainFacts(answers, context.parsed.uncertain);
+
   const modules = completed
     ? [runFiscalisteAdvisor, runComptableAdvisor, runPlanificateurAdvisor, runAvocatAdvisor]
     : [];
@@ -101,7 +103,8 @@ function buildHeuristicCore(answers: AdvisorAnswer[]): AdvisorResultCore {
     coordinatorSummary,
     recommendations: outputs.map((output) => output.recommendation),
     metrics,
-    followUps
+    followUps,
+    uncertainty
   };
 }
 
@@ -131,13 +134,16 @@ export async function evaluateAdvisors(
     // Utiliser GPT uniquement lorsque le questionnaire est complété; sinon, retourner la prochaine question.
     const nextQuestion = determineNextQuestion(answers);
     if (nextQuestion) {
+      const parsed = parseFacts(answers);
+      const uncertainty = describeUncertainFacts(answers, parsed.uncertain);
       const core: AdvisorResultCore = {
         nextQuestion,
         completed: false,
         coordinatorSummary: '',
         recommendations: [],
         metrics: [],
-        followUps: []
+        followUps: [],
+        uncertainty
       };
       return attachEngine(core, 'gpt', false, 'Propulsé par OpenAI');
     }

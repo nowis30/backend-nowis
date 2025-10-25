@@ -1,4 +1,4 @@
-import { AdvisorAnswer, AdvisorFacts, AdvisorQuestion } from './types';
+import { AdvisorAnswer, AdvisorFacts, AdvisorQuestion, AdvisorUncertaintyField } from './types';
 
 const UNKNOWN_ALIASES = new Set([
   'je ne sais pas',
@@ -157,6 +157,23 @@ const QUESTIONS: AdvisorQuestion[] = [
 
 export function listAdvisorQuestions(): AdvisorQuestion[] {
   return QUESTIONS;
+}
+
+export function describeUncertainFacts(
+  answers: AdvisorAnswer[],
+  uncertain: Record<string, boolean>
+): AdvisorUncertaintyField[] {
+  if (!uncertain) {
+    return [];
+  }
+
+  const answered = new Set(answers.map((answer) => answer.questionId));
+
+  return QUESTIONS.filter((question) => uncertain[question.id] && answered.has(question.id)).map((question) => ({
+    questionId: question.id,
+    label: question.label,
+    description: question.description
+  }));
 }
 
 export function parseFacts(answers: AdvisorAnswer[]): AdvisorFacts {

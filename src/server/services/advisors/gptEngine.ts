@@ -1,5 +1,5 @@
 import { env } from '../../env';
-import { determineNextQuestion, parseFacts } from './parser';
+import { describeUncertainFacts, determineNextQuestion, parseFacts } from './parser';
 import type {
   AdvisorAnswer,
   AdvisorContext,
@@ -7,7 +7,8 @@ import type {
   AdvisorMetric,
   AdvisorModuleOutput,
   AdvisorRecommendation,
-  AdvisorResult
+  AdvisorResult,
+  AdvisorUncertaintyField
 } from './types';
 
 type AdvisorResultCore = Omit<AdvisorResult, 'engine'>;
@@ -160,18 +161,33 @@ function coerceCoreShape(data: any): AdvisorResultCore {
       .filter((x): x is AdvisorExpertId => Boolean(x))
   }));
 
+  const uncertainty: AdvisorUncertaintyField[] = safeArray(data.uncertainty)
+    .map((item: any): AdvisorUncertaintyField | null => {
+      const questionId = safeStr(item?.questionId);
+      const label = safeStr(item?.label);
+      if (!questionId || !label) {
+        return null;
+      }
+      const description = safeStr(item?.description) || undefined;
+      return { questionId, label, description };
+    })
+    .filter((entry): entry is AdvisorUncertaintyField => Boolean(entry));
+
   return {
     nextQuestion: null,
     completed: safeBool(data.completed, true),
     coordinatorSummary: safeStr(data.coordinatorSummary),
   recommendations: recs,
     metrics,
-    followUps: safeArray(data.followUps).map((x) => safeStr(x)).filter(Boolean)
+    followUps: safeArray(data.followUps).map((x) => safeStr(x)).filter(Boolean),
+    uncertainty
   };
 }
 
 export async function buildGptCore(answers: AdvisorAnswer[]): Promise<AdvisorResultCore> {
   const nextQuestion = determineNextQuestion(answers);
+  const parsed = parseFacts(answers);
+  const uncertainty = describeUncertainFacts(answers, parsed.uncertain);
   if (nextQuestion) {
     // Pas besoin d’appeler GPT tant que le questionnaire n’est pas complété.
     return {
@@ -180,13 +196,14 @@ export async function buildGptCore(answers: AdvisorAnswer[]): Promise<AdvisorRes
       coordinatorSummary: '',
       recommendations: [],
       metrics: [],
-      followUps: []
+      followUps: [],
+      uncertainty
     };
   }
 
   const context: AdvisorContext = {
     answers,
-    parsed: parseFacts(answers)
+    parsed
   };
 
   const prompt = buildPrompt(context);
@@ -196,7 +213,12 @@ export async function buildGptCore(answers: AdvisorAnswer[]): Promise<AdvisorRes
   try {
     const data = await callOpenAIJson(prompt, controller.signal);
     const core = coerceCoreShape(data);
-    return { ...core, nextQuestion: null, completed: true };
+    return {
+      ...core,
+      nextQuestion: null,
+      completed: true,
+      uncertainty: core.uncertainty.length ? core.uncertainty : uncertainty
+    };
   } catch (err) {
     // En cas d’erreur OpenAI, renvoyer un noyau minimal pour ne pas casser le flux
     return {
@@ -214,7 +236,8 @@ export async function buildGptCore(answers: AdvisorAnswer[]): Promise<AdvisorRes
         }
       ],
       metrics: [],
-      followUps: []
+      followUps: [],
+      uncertainty
     };
   } finally {
     clearTimeout(timeout);
