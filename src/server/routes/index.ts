@@ -14,6 +14,8 @@ import { reportsRouter } from './reports';
 import { dividendsRouter } from './dividends';
 import { taxRouter } from './tax';
 import { advisorsRouter } from './advisors';
+import { leveragedBuybackRouter } from './leveragedBuyback';
+import { valuationRouter } from './valuation';
 
 const routes = Router();
 
@@ -31,5 +33,7 @@ routes.use('/reports', reportsRouter);
 routes.use('/corporate', dividendsRouter);
 routes.use('/tax', taxRouter);
 routes.use('/advisors', advisorsRouter);
+routes.use('/leveraged-buyback', leveragedBuybackRouter);
+routes.use('/valuation', valuationRouter);
 
 export { routes };

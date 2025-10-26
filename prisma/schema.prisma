@@ -17,6 +17,9 @@ model User {
   companies    Company[]
   shareholders Shareholder[]
   roles        UserRole[]
+  leveragedBuybackScenarios LeveragedBuybackScenario[]
+  rentalTaxStatements      RentalTaxStatement[]
+  valuationSnapshots       ValuationSnapshot[]
 }
 
 model Property {
@@ -40,6 +43,7 @@ model Property {
   invoices         Invoice[]
   depreciationInfo DepreciationSetting?
   attachments      Attachment[]
+  rentalTaxStatements RentalTaxStatement[]
 }
 
 model Company {
@@ -65,6 +69,8 @@ model Company {
   returnsOfCapital   ReturnOfCapitalRecord[]
   shareholderLoans   ShareholderLoan[]
   corporateTaxReturns CorporateTaxReturn[]
+  leveragedBuybackScenarios LeveragedBuybackScenario[]
+  valuationSnapshots       ValuationSnapshot[]
 }
 
 model Shareholder {
@@ -439,4 +445,82 @@ model Attachment {
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   mortgage Mortgage? @relation(fields: [mortgageId], references: [id], onDelete: SetNull)
+}
+
+model LeveragedBuybackScenario {
+  id                    Int       @id @default(autoincrement())
+  userId                Int
+  companyId             Int?
+  label                 String?
+  loanAmount            Decimal
+  interestRate          Decimal
+  taxRate               Decimal
+  expectedGrowth        Decimal
+  termMonths            Int
+  monthlyPayment        Decimal
+  totalInterest         Decimal
+  afterTaxInterest      Decimal
+  taxShield             Decimal
+  projectedShareValue   Decimal
+  projectedShareGain    Decimal
+  netGain               Decimal
+  breakEvenGrowth       Decimal
+  returnOnInvestment    Decimal
+  paybackYears          Decimal?
+  approved              Boolean   @default(false)
+  notes                 String?
+  generatedAt           DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+enum RentalTaxFormType {
+  T776
+  TP128
+}
+
+model RentalTaxStatement {
+  id          Int               @id @default(autoincrement())
+  userId      Int
+  propertyId  Int?
+  formType    RentalTaxFormType
+  taxYear     Int
+  payload     Json
+  computed    Json
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([userId, taxYear])
+  @@index([userId, formType, taxYear])
+  @@index([propertyId, taxYear])
+}
+
+model ValuationSnapshot {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  companyId         Int?
+  valuationDate     DateTime
+  totals            Json
+  properties        Json
+  shareClasses      Json
+  shareholderEquity Json
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([userId, valuationDate])
+  @@index([companyId, valuationDate])
 }
