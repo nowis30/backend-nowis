@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import { getPersonalIncomeSummary } from '../personalIncomeService';
 
 const FEDERAL_BRACKETS: Array<{ limit: number; rate: number }> = [
   { limit: 53_359, rate: 0.15 },
@@ -111,11 +112,17 @@ export async function calculatePersonalTaxReturn(input: PersonalTaxInput): Promi
     throw new Error('Shareholder not found');
   }
 
-  const employmentIncome = Math.max(0, input.employmentIncome ?? 0);
-  const businessIncome = Math.max(0, input.businessIncome ?? 0);
-  const eligibleDividends = Math.max(0, input.eligibleDividends ?? 0);
-  const nonEligibleDividends = Math.max(0, input.nonEligibleDividends ?? 0);
-  const capitalGains = Math.max(0, input.capitalGains ?? 0);
+  const incomeSummary = await getPersonalIncomeSummary(input.shareholderId, input.taxYear);
+  const fallback = incomeSummary.totalsForTax;
+
+  const employmentIncome = Math.max(0, input.employmentIncome ?? fallback.employmentIncome ?? 0);
+  const businessIncome = Math.max(0, input.businessIncome ?? fallback.businessIncome ?? 0);
+  const eligibleDividends = Math.max(0, input.eligibleDividends ?? fallback.eligibleDividends ?? 0);
+  const nonEligibleDividends = Math.max(
+    0,
+    input.nonEligibleDividends ?? fallback.nonEligibleDividends ?? 0
+  );
+  const capitalGains = Math.max(0, input.capitalGains ?? fallback.capitalGains ?? 0);
   const deductions = Math.max(0, input.deductions ?? 0);
   const otherCredits = Math.max(0, input.otherCredits ?? 0);
 

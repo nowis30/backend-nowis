@@ -20,6 +20,11 @@ model User {
   leveragedBuybackScenarios LeveragedBuybackScenario[]
   rentalTaxStatements      RentalTaxStatement[]
   valuationSnapshots       ValuationSnapshot[]
+  personalAssets           PersonalAsset[]
+  personalLiabilities      PersonalLiability[]
+  familyTrusts             FamilyTrust[]
+  familyWealthSnapshots    FamilyWealthSnapshot[]
+  familyWealthScenarios    FamilyWealthScenario[]
 }
 
 model Property {
@@ -91,6 +96,8 @@ model Shareholder {
   returnsOfCapital  ReturnOfCapitalRecord[]
   shareholderLoans  ShareholderLoan[]
   personalTaxReturns PersonalTaxReturn[]
+  personalIncomes   PersonalIncome[]
+  familyTrust       FamilyTrust?
 }
 
 model CompanyShareholder {
@@ -317,6 +324,117 @@ model PersonalTaxReturn {
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
 
   @@unique([shareholderId, taxYear])
+}
+
+model PersonalIncome {
+  id            Int       @id @default(autoincrement())
+  shareholderId Int
+  taxYear       Int
+  category      String
+  label         String
+  source        String?
+  slipType      String?
+  amount        Decimal   @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+
+  @@index([shareholderId, taxYear])
+}
+
+model PersonalAsset {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  label       String
+  category    String?
+  ownerType   String    @default("PERSONAL")
+  ownerNotes  String?
+  valuation   Decimal   @default(0)
+  valuationDate DateTime
+  liquidityTag String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, valuationDate])
+}
+
+model PersonalLiability {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  label       String
+  category    String?
+  counterparty String?
+  balance     Decimal   @default(0)
+  interestRate Decimal? 
+  maturityDate DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model FamilyTrust {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  shareholderId  Int?
+  name           String
+  establishedOn  DateTime?
+  netAssetValue  Decimal   @default(0)
+  mandate        String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
+
+model FamilyWealthSnapshot {
+  id                   Int      @id @default(autoincrement())
+  userId               Int
+  snapshotDate         DateTime
+  totalAssets          Decimal   @default(0)
+  totalLiabilities     Decimal   @default(0)
+  netWorth             Decimal   @default(0)
+  propertyValue        Decimal   @default(0)
+  companyValue         Decimal   @default(0)
+  trustValue           Decimal   @default(0)
+  personalAssetsValue  Decimal   @default(0)
+  liquidAssetsValue    Decimal   @default(0)
+  personalDebtValue    Decimal   @default(0)
+  shareholderLoanValue Decimal   @default(0)
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, snapshotDate])
+  @@index([userId, snapshotDate])
+}
+
+model FamilyWealthScenario {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  label       String
+  scenarioType String   @default("BASELINE")
+  parameters  Json?
+  results     Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scenarioType])
 }
 
 model PropertyUnit {

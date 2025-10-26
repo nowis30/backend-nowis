@@ -16,6 +16,8 @@ import { taxRouter } from './tax';
 import { advisorsRouter } from './advisors';
 import { leveragedBuybackRouter } from './leveragedBuyback';
 import { valuationRouter } from './valuation';
+import { personalIncomesRouter } from './personalIncomes';
+import { wealthRouter } from './wealth';
 
 const routes = Router();
 
@@ -35,5 +37,7 @@ routes.use('/tax', taxRouter);
 routes.use('/advisors', advisorsRouter);
 routes.use('/leveraged-buyback', leveragedBuybackRouter);
 routes.use('/valuation', valuationRouter);
+routes.use('/personal-incomes', personalIncomesRouter);
+routes.use('/wealth', wealthRouter);
 
 export { routes };
