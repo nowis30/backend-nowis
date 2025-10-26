@@ -78,6 +78,41 @@ invoicesRouter.post('/', async (req, res, next) => {
         next(error);
     }
 });
+invoicesRouter.put('/:id', async (req, res, next) => {
+    try {
+        const { id } = idParamSchema.parse(req.params);
+        const data = invoiceBodySchema.parse(req.body);
+        const existing = await prisma_1.prisma.invoice.findFirst({
+            where: { id, property: { userId: req.userId } }
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Facture introuvable.' });
+        }
+        const property = await prisma_1.prisma.property.findFirst({
+            where: { id: data.propertyId, userId: req.userId }
+        });
+        if (!property) {
+            return res.status(404).json({ error: 'Immeuble introuvable.' });
+        }
+        const updated = await prisma_1.prisma.invoice.update({
+            where: { id: existing.id },
+            data: {
+                propertyId: data.propertyId,
+                invoiceDate: data.invoiceDate,
+                supplier: data.supplier,
+                amount: data.amount,
+                category: data.category,
+                gst: data.gst,
+                qst: data.qst,
+                description: data.description
+            }
+        });
+        res.json(updated);
+    }
+    catch (error) {
+        next(error);
+    }
+});
 invoicesRouter.delete('/:id', async (req, res, next) => {
     try {
         const { id } = idParamSchema.parse(req.params);

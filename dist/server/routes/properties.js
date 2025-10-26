@@ -12,6 +12,8 @@ const prisma_1 = require("../lib/prisma");
 const authenticated_1 = require("../middlewares/authenticated");
 const amortization_1 = require("../services/amortization");
 const attachmentStorage_1 = require("../services/attachmentStorage");
+const env_1 = require("../env");
+const attachmentsExtractor_1 = require("../services/attachmentsExtractor");
 const propertiesRouter = (0, express_1.Router)();
 exports.propertiesRouter = propertiesRouter;
 const upload = (0, multer_1.default)({
@@ -603,6 +605,62 @@ propertiesRouter.get('/:id/attachments/:attachmentId/download', async (req, res,
         const stream = fs_1.default.createReadStream(filePath);
         stream.on('error', next);
         stream.pipe(res);
+    }
+    catch (error) {
+        next(error);
+    }
+});
+propertiesRouter.post('/:id/attachments/:attachmentId/extract', async (req, res, next) => {
+    try {
+        const { id, attachmentId } = attachmentParamsSchema.parse(req.params);
+        const attachment = (await prisma_1.prisma.attachment.findFirst({
+            where: {
+                id: attachmentId,
+                propertyId: id,
+                property: { userId: req.userId }
+            }
+        }));
+        if (!attachment) {
+            return res.status(404).json({ error: 'Pièce jointe introuvable.' });
+        }
+        if (!env_1.env.OPENAI_API_KEY) {
+            return res
+                .status(503)
+                .json({ error: 'Extraction indisponible: configurez OPENAI_API_KEY côté serveur.' });
+        }
+        const ct = attachment.contentType || 'application/octet-stream';
+        if (!/^image\//i.test(ct) && !/^application\/(pdf|x-pdf)$/i.test(ct)) {
+            return res
+                .status(415)
+                .json({ error: "Type non supporté pour l'extraction (images ou PDF uniquement)." });
+        }
+        const result = await (0, attachmentsExtractor_1.extractExpenseFromAttachment)(attachment.storagePath, ct);
+        const autoCreateRaw = Array.isArray(req.query.autoCreate)
+            ? req.query.autoCreate[0]
+            : req.query.autoCreate;
+        const normalizedFlag = typeof autoCreateRaw === 'string'
+            ? autoCreateRaw.toLowerCase().trim()
+            : '';
+        const shouldCreate = ['1', 'true', 'yes'].includes(normalizedFlag);
+        let createdExpenseId = null;
+        if (shouldCreate &&
+            result.label &&
+            result.amount > 0 &&
+            /^\d{4}-\d{2}-\d{2}$/.test(result.startDate)) {
+            const createdExpense = await prisma_1.prisma.expense.create({
+                data: {
+                    propertyId: id,
+                    label: result.label,
+                    category: result.category || 'Autre',
+                    amount: result.amount,
+                    frequency: 'PONCTUEL',
+                    startDate: new Date(result.startDate),
+                    endDate: null
+                }
+            });
+            createdExpenseId = createdExpense.id;
+        }
+        res.json({ extracted: result, createdExpenseId });
     }
     catch (error) {
         next(error);
