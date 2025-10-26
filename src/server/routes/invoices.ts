@@ -72,7 +72,7 @@ invoicesRouter.post('/', async (req: AuthenticatedRequest, res: Response, next: 
     const invoice = await prisma.invoice.create({
       data: {
         propertyId: data.propertyId,
-  invoiceDate: data.invoiceDate,
+        invoiceDate: data.invoiceDate,
         supplier: data.supplier,
         amount: data.amount,
         category: data.category,
@@ -83,6 +83,47 @@ invoicesRouter.post('/', async (req: AuthenticatedRequest, res: Response, next: 
     });
 
     res.status(201).json(invoice);
+  } catch (error) {
+    next(error);
+  }
+});
+
+invoicesRouter.put('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    const data = invoiceBodySchema.parse(req.body);
+
+    const existing = await prisma.invoice.findFirst({
+      where: { id, property: { userId: req.userId } }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Facture introuvable.' });
+    }
+
+    const property = await prisma.property.findFirst({
+      where: { id: data.propertyId, userId: req.userId }
+    });
+
+    if (!property) {
+      return res.status(404).json({ error: 'Immeuble introuvable.' });
+    }
+
+    const updated = await prisma.invoice.update({
+      where: { id: existing.id },
+      data: {
+        propertyId: data.propertyId,
+        invoiceDate: data.invoiceDate,
+        supplier: data.supplier,
+        amount: data.amount,
+        category: data.category,
+        gst: data.gst,
+        qst: data.qst,
+        description: data.description
+      }
+    });
+
+    res.json(updated);
   } catch (error) {
     next(error);
   }
