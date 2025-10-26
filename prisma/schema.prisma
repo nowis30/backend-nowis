@@ -383,7 +383,7 @@ model PersonalLiability {
 model FamilyTrust {
   id             Int       @id @default(autoincrement())
   userId         Int
-  shareholderId  Int?
+  shareholderId  Int?      @unique
   name           String
   establishedOn  DateTime?
   netAssetValue  Decimal   @default(0)
