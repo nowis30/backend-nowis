@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { RentalTaxFormType } from '@prisma/client';
 
 import { authenticated, type AuthenticatedRequest } from '../middlewares/authenticated';
-import { requireRole } from '../middlewares/requireRole';
 import { calculateCorporateTaxReturn } from '../services/tax/corporateTaxEngine';
 import { calculatePersonalTaxReturn } from '../services/tax/personalTaxEngine';
 import { buildT4Csv, buildRl1Csv, buildT5Csv, buildRl3Csv } from '../services/tax/taxExportService';
@@ -19,7 +18,7 @@ import {
 const router = Router();
 
 router.use(authenticated);
-router.use(requireRole('ADMIN'));
+
 
 const corporateInputSchema = z.object({
   companyId: z.number().int().positive(),
@@ -137,20 +136,59 @@ const rentalBaseSchema = z.object({
   propertyId: z.number().int().positive().optional().nullable()
 });
 
+const metadataTypeEnum = z.enum(['text', 'number', 'percentage', 'date', 'textarea']);
+
+const rentalMetadataSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  value: z.union([z.string(), z.coerce.number()]).nullable(),
+  type: metadataTypeEnum.optional(),
+  hint: z.string().max(500).nullable().optional(),
+  lineNumber: z.string().max(32).nullable().optional()
+});
+
+const rentalIncomeLabelsSchema = z.object({
+  grossRents: z.string().min(1),
+  otherIncome: z.string().min(1),
+  totalIncome: z.string().min(1),
+  grossRentsLine: z.string().max(32).nullable().optional(),
+  otherIncomeLine: z.string().max(32).nullable().optional(),
+  totalIncomeLine: z.string().max(32).nullable().optional()
+});
+
 const rentalExpenseSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
+  lineNumber: z.string().max(32).nullable().optional(),
+  hint: z.string().max(500).nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
   amount: z.coerce.number(),
   category: z.string().max(255).nullable().optional()
 });
 
+const rentalCcaLineSchema = z.object({
+  key: z.string().min(1),
+  classNumber: z.string().min(1),
+  description: z.string().max(255).nullable().optional(),
+  ccaRate: z.coerce.number().nullable().optional(),
+  openingBalance: z.coerce.number().nullable().optional(),
+  additions: z.coerce.number().nullable().optional(),
+  dispositions: z.coerce.number().nullable().optional(),
+  baseForCca: z.coerce.number().nullable().optional(),
+  ccaAmount: z.coerce.number().nullable().optional(),
+  closingBalance: z.coerce.number().nullable().optional()
+});
+
 const rentalPayloadSchema = z.object({
+  metadata: z.array(rentalMetadataSchema).optional(),
   income: z.object({
     grossRents: z.coerce.number().min(0),
     otherIncome: z.coerce.number().min(0),
     totalIncome: z.coerce.number().min(0)
   }),
+  incomeLabels: rentalIncomeLabelsSchema.optional(),
   expenses: z.array(rentalExpenseSchema).default([]),
+  cca: z.array(rentalCcaLineSchema).optional(),
   totals: z.object({
     totalExpenses: z.coerce.number().min(0),
     netIncome: z.coerce.number()

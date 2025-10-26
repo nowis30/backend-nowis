@@ -139,12 +139,481 @@ interface RentalTaxExpenseLine {
   label: string;
   amount: number;
   category?: string | null;
+  lineNumber?: string | null;
+  hint?: string | null;
+  description?: string | null;
 }
 
 interface RentalTaxIncomeLine {
   key: string;
   label: string;
   amount: number;
+}
+
+type RentalTaxMetadataFieldType = 'text' | 'number' | 'percentage' | 'date' | 'textarea';
+
+interface RentalTaxMetadataField {
+  key: string;
+  label: string;
+  value: string | number | null;
+  type?: RentalTaxMetadataFieldType;
+  hint?: string | null;
+  lineNumber?: string | null;
+}
+
+interface RentalTaxIncomeLabels {
+  grossRents: string;
+  otherIncome: string;
+  totalIncome: string;
+  grossRentsLine?: string | null;
+  otherIncomeLine?: string | null;
+  totalIncomeLine?: string | null;
+}
+
+interface RentalTaxCcaLine {
+  key: string;
+  classNumber: string;
+  description?: string | null;
+  ccaRate?: number | null;
+  openingBalance?: number | null;
+  additions?: number | null;
+  dispositions?: number | null;
+  baseForCca?: number | null;
+  ccaAmount?: number | null;
+  closingBalance?: number | null;
+}
+
+interface FormMetadataDefinition {
+  key: string;
+  label: string;
+  type?: RentalTaxMetadataFieldType;
+  hint?: string | null;
+  lineNumber?: string | null;
+  source?: 'propertyAddress' | 'propertyName' | 'taxYear';
+}
+
+interface FormExpenseDefinition {
+  key: string;
+  label: string;
+  lineNumber?: string | null;
+  hint?: string | null;
+  matchers?: string[];
+  fallback?: boolean;
+  defaultCategory?: string | null;
+  description?: string | null;
+}
+
+interface FormDefinitionConfig {
+  incomeLabels: RentalTaxIncomeLabels;
+  metadata: FormMetadataDefinition[];
+  expenses: FormExpenseDefinition[];
+}
+
+const T776_DEFINITIONS: FormDefinitionConfig = {
+  incomeLabels: {
+    grossRents: 'Loyers bruts (ligne 8141)',
+    otherIncome: 'Autres revenus (ligne 8230)',
+    totalIncome: 'Total des revenus (ligne 8299)',
+    grossRentsLine: '8141',
+    otherIncomeLine: '8230',
+    totalIncomeLine: '8299'
+  },
+  metadata: [
+    {
+      key: 'propertyAddress',
+      label: "Adresse de l'immeuble (partie 1)",
+      type: 'textarea',
+      source: 'propertyAddress'
+    },
+    {
+      key: 'taxYear',
+      label: 'Année fiscale',
+      type: 'number',
+      source: 'taxYear'
+    },
+    {
+      key: 'ownershipPercentage',
+      label: 'Pourcentage de participation',
+      type: 'percentage',
+      hint: 'Indique la part de propriété (ex. 100, 50).' 
+    },
+    {
+      key: 'coOwners',
+      label: 'Autres copropriétaires (noms et NAS)',
+      type: 'textarea'
+    }
+  ],
+  expenses: [
+    {
+      key: 'advertising',
+      label: 'Publicité',
+      lineNumber: '8521',
+      matchers: ['publicité', 'advertising', 'promo']
+    },
+    {
+      key: 'insurance',
+      label: 'Assurance',
+      lineNumber: '8690',
+      matchers: ['assurance', 'insurance']
+    },
+    {
+      key: 'interest',
+      label: 'Intérêts et frais financiers',
+      lineNumber: '8710',
+      matchers: ['intér', 'interest', 'hypoth', 'financ']
+    },
+    {
+      key: 'office',
+      label: 'Frais de bureau',
+      lineNumber: '8810',
+      matchers: ['bureau', 'office', 'papeterie']
+    },
+    {
+      key: 'professional',
+      label: 'Honoraires professionnels',
+      lineNumber: '8860',
+      matchers: ['honoraires', 'comptable', 'avocat', 'legal', 'professional', 'notaire']
+    },
+    {
+      key: 'management',
+      label: 'Gestion et administration',
+      lineNumber: '8871',
+      matchers: ['gestion', 'administr', 'management', 'admin']
+    },
+    {
+      key: 'repairs',
+      label: 'Entretien et réparations',
+      lineNumber: '8910',
+      matchers: ['entretien', 'répar', 'repair', 'maintenance']
+    },
+    {
+      key: 'salaries',
+      label: 'Salaires, avantages et contrats',
+      lineNumber: '8960',
+      matchers: ['salaire', 'wage', 'payroll', 'avantage', 'benefit', 'contrat']
+    },
+    {
+      key: 'taxes',
+      label: 'Taxes municipales et scolaires',
+      lineNumber: '9060',
+      matchers: ['taxe', 'taxes', 'municip', 'school', 'fonci']
+    },
+    {
+      key: 'travel',
+      label: 'Frais de déplacement',
+      lineNumber: '9180',
+      matchers: ['déplacement', 'travel', 'voyage', 'kilom']
+    },
+    {
+      key: 'utilities',
+      label: 'Services publics (électricité, chauffage, eau)',
+      lineNumber: '9200',
+      matchers: ['électric', 'hydro', 'chauff', 'gaz', 'utility', 'eau', 'water']
+    },
+    {
+      key: 'vehicle',
+      label: 'Dépenses de véhicule motorisé',
+      lineNumber: '9281',
+      matchers: ['véhicule', 'vehicle', 'auto', 'voiture', 'camion', 'truck']
+    },
+    {
+      key: 'other',
+      label: 'Autres dépenses',
+      lineNumber: '9270',
+      hint: 'Inclure tout poste non répertorié ailleurs.',
+      fallback: true
+    },
+    {
+      key: 'cca',
+      label: 'Déduction pour amortissement (CCA)',
+      lineNumber: '9936',
+      matchers: ['cca', 'amortissement', 'depreciation']
+    }
+  ]
+};
+
+const TP128_DEFINITIONS: FormDefinitionConfig = {
+  incomeLabels: {
+    grossRents: 'Revenus bruts de loyers (ligne 12)',
+    otherIncome: 'Autres revenus (ligne 16)',
+    totalIncome: 'Revenus totaux (ligne 19)',
+    grossRentsLine: '12',
+    otherIncomeLine: '16',
+    totalIncomeLine: '19'
+  },
+  metadata: [
+    {
+      key: 'propertyAddress',
+      label: "Adresse de l'immeuble locatif",
+      type: 'textarea',
+      source: 'propertyAddress'
+    },
+    {
+      key: 'municipalRoll',
+      label: "Numéro de rôle d'évaluation",
+      type: 'text'
+    },
+    {
+      key: 'taxYear',
+      label: 'Année fiscale',
+      type: 'number',
+      source: 'taxYear'
+    },
+    {
+      key: 'personalUsePercentage',
+      label: "Pourcentage d'utilisation personnelle",
+      type: 'percentage',
+      hint: 'Indiquer la portion utilisée à des fins personnelles.'
+    },
+    {
+      key: 'unitsRented',
+      label: 'Nombre d’unités louées',
+      type: 'number'
+    },
+    {
+      key: 'unitsVacant',
+      label: 'Nombre d’unités vacantes',
+      type: 'number'
+    }
+  ],
+  expenses: [
+    {
+      key: 'interest',
+      label: 'Intérêts sur dettes',
+      lineNumber: '203',
+      matchers: ['intér', 'interest', 'hypoth', 'financ']
+    },
+    {
+      key: 'taxes',
+      label: 'Taxes municipales et scolaires',
+      lineNumber: '206',
+      matchers: ['taxe', 'taxes', 'municip', 'school', 'fonci']
+    },
+    {
+      key: 'insurance',
+      label: 'Assurance',
+      lineNumber: '209',
+      matchers: ['assurance', 'insurance']
+    },
+    {
+      key: 'utilities',
+      label: 'Chauffage, électricité et eau',
+      lineNumber: '212',
+      matchers: ['électric', 'hydro', 'chauff', 'gaz', 'utility', 'eau', 'water']
+    },
+    {
+      key: 'repairs',
+      label: 'Entretien et réparations',
+      lineNumber: '215',
+      matchers: ['entretien', 'répar', 'repair', 'maintenance']
+    },
+    {
+      key: 'management',
+      label: 'Gestion et administration',
+      lineNumber: '218',
+      matchers: ['gestion', 'administr', 'management', 'admin']
+    },
+    {
+      key: 'salaries',
+      label: 'Salaires et avantages',
+      lineNumber: '221',
+      matchers: ['salaire', 'wage', 'payroll', 'avantage', 'benefit', 'contrat']
+    },
+    {
+      key: 'supplies',
+      label: 'Fournitures et petits outils',
+      lineNumber: '224',
+      matchers: ['fourniture', 'supply', 'outil', 'outils']
+    },
+    {
+      key: 'professional',
+      label: 'Honoraires professionnels',
+      lineNumber: '227',
+      matchers: ['honoraires', 'comptable', 'avocat', 'legal', 'professional', 'notaire']
+    },
+    {
+      key: 'travel',
+      label: 'Frais de déplacement',
+      lineNumber: '230',
+      matchers: ['déplacement', 'travel', 'voyage', 'kilom']
+    },
+    {
+      key: 'other',
+      label: 'Autres dépenses',
+      lineNumber: '233',
+      hint: 'Inclure les dépenses non répertoriées dans les lignes précédentes.',
+      fallback: true
+    },
+    {
+      key: 'cca',
+      label: 'Amortissement (CCA)',
+      lineNumber: '235',
+      matchers: ['cca', 'amortissement', 'depreciation']
+    }
+  ]
+};
+
+const FORM_DEFINITIONS: Record<RentalTaxFormType, FormDefinitionConfig> = {
+  T776: T776_DEFINITIONS,
+  TP128: TP128_DEFINITIONS
+};
+
+function normalizeMatcherInput(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase();
+}
+
+function buildMetadataFields(
+  definitions: FormMetadataDefinition[],
+  property: { name: string; address: string | null } | null,
+  taxYear: number,
+  previous: RentalTaxMetadataField[] | undefined | null
+): RentalTaxMetadataField[] {
+  const previousMap = new Map((previous ?? []).map((field) => [field.key, field]));
+
+  return definitions.map((definition) => {
+    const previousField = previousMap.get(definition.key);
+    let value: string | number | null = previousField?.value ?? null;
+
+    if (previousField === undefined) {
+      if (definition.source === 'propertyAddress') {
+        value = property?.address ?? property?.name ?? null;
+      } else if (definition.source === 'propertyName') {
+        value = property?.name ?? null;
+      } else if (definition.source === 'taxYear') {
+        value = taxYear;
+      }
+    }
+
+    return {
+      key: definition.key,
+      label: definition.label,
+      type: definition.type,
+      hint: definition.hint ?? null,
+      lineNumber: definition.lineNumber ?? null,
+      value
+    } satisfies RentalTaxMetadataField;
+  });
+}
+
+function allocateExpenseAmounts(
+  computed: RentalTaxComputedData,
+  definitions: FormExpenseDefinition[]
+): Map<string, number> {
+  const amounts = new Map<string, number>();
+  definitions.forEach((definition) => {
+    amounts.set(definition.key, 0);
+  });
+
+  const fallback = definitions.find((definition) => definition.fallback)?.key ?? null;
+
+  computed.expenses.forEach((expense) => {
+    const normalizedCategory = normalizeMatcherInput(expense.category ?? null);
+    const normalizedLabel = normalizeMatcherInput(expense.label);
+
+    const matched = definitions.find((definition) =>
+      definition.matchers?.some((matcher) =>
+        normalizedCategory.includes(matcher) || normalizedLabel.includes(matcher)
+      )
+    );
+
+    if (matched) {
+      const current = amounts.get(matched.key) ?? 0;
+      amounts.set(matched.key, round(current + expense.amount));
+      return;
+    }
+
+    if (fallback) {
+      const current = amounts.get(fallback) ?? 0;
+      amounts.set(fallback, round(current + expense.amount));
+    }
+  });
+
+  return amounts;
+}
+
+function buildFormPayload(params: {
+  formType: RentalTaxFormType;
+  computed: RentalTaxComputedData;
+  property: { id: number; name: string; address: string | null } | null;
+  taxYear: number;
+  previous?: RentalTaxFormPayload | null;
+}): RentalTaxFormPayload {
+  const definition = FORM_DEFINITIONS[params.formType];
+  const previous = params.previous ?? null;
+
+  const metadata = buildMetadataFields(
+    definition.metadata,
+    params.property,
+    params.taxYear,
+    previous?.metadata
+  );
+
+  const income = {
+    grossRents: previous?.income?.grossRents ?? params.computed.grossRents,
+    otherIncome: previous?.income?.otherIncome ?? params.computed.otherIncome,
+    totalIncome: previous?.income?.totalIncome ?? params.computed.totalIncome
+  };
+
+  const expenseAmounts = allocateExpenseAmounts(params.computed, definition.expenses);
+  const previousExpenseMap = new Map((previous?.expenses ?? []).map((line) => [line.key, line]));
+
+  const expenses = definition.expenses.map((expenseDefinition) => {
+    const previousLine = previousExpenseMap.get(expenseDefinition.key);
+    const amount =
+      previousLine && previousLine.amount !== undefined
+        ? previousLine.amount
+        : expenseAmounts.get(expenseDefinition.key) ?? 0;
+
+    return {
+      key: expenseDefinition.key,
+      label: expenseDefinition.label,
+      lineNumber: expenseDefinition.lineNumber ?? null,
+      hint: expenseDefinition.hint ?? null,
+      category: previousLine?.category ?? expenseDefinition.defaultCategory ?? null,
+      description: previousLine?.description ?? expenseDefinition.description ?? null,
+      amount
+    } satisfies RentalTaxExpenseLine;
+  });
+
+  const computedCcaMap = new Map(params.computed.ccaDetails.map((line) => [line.key, line]));
+  const previousCcaMap = new Map((previous?.cca ?? []).map((line) => [line.key, line]));
+  const cca: RentalTaxCcaLine[] = [];
+
+  if (computedCcaMap.size > 0) {
+    computedCcaMap.forEach((line, key) => {
+      const previousLine = previousCcaMap.get(key);
+      cca.push({
+        key,
+        classNumber: previousLine?.classNumber ?? line.classNumber,
+        description: previousLine?.description ?? line.description ?? null,
+        ccaRate: previousLine?.ccaRate ?? line.ccaRate ?? null,
+        openingBalance: previousLine?.openingBalance ?? line.openingBalance ?? null,
+        additions: previousLine?.additions ?? line.additions ?? null,
+        dispositions: previousLine?.dispositions ?? line.dispositions ?? null,
+        baseForCca: previousLine?.baseForCca ?? line.baseForCca ?? null,
+        ccaAmount: previousLine?.ccaAmount ?? line.ccaAmount ?? null,
+        closingBalance: previousLine?.closingBalance ?? line.closingBalance ?? null
+      });
+    });
+  }
+
+  (previous?.cca ?? []).forEach((line) => {
+    if (!computedCcaMap.has(line.key)) {
+      cca.push(line);
+    }
+  });
+
+  return {
+    metadata,
+    income,
+    incomeLabels: definition.incomeLabels,
+    expenses,
+    cca: cca.length > 0 ? cca : undefined,
+    totals: previous?.totals ?? {
+      totalExpenses: 0,
+      netIncome: 0
+    }
+  } satisfies RentalTaxFormPayload;
 }
 
 export interface RentalTaxComputedData {
@@ -157,15 +626,19 @@ export interface RentalTaxComputedData {
   mortgageInterest: number;
   capitalCostAllowance: number;
   incomeDetails: RentalTaxIncomeLine[];
+  ccaDetails: RentalTaxCcaLine[];
 }
 
 export interface RentalTaxFormPayload {
+  metadata?: RentalTaxMetadataField[];
   income: {
     grossRents: number;
     otherIncome: number;
     totalIncome: number;
   };
+  incomeLabels?: RentalTaxIncomeLabels;
   expenses: RentalTaxExpenseLine[];
+  cca?: RentalTaxCcaLine[];
   totals: {
     totalExpenses: number;
     netIncome: number;
@@ -224,14 +697,17 @@ function calculateCca(
     openingUcc?: Prisma.Decimal | number | null;
     additions?: Prisma.Decimal | number | null;
     dispositions?: Prisma.Decimal | number | null;
+    classCode?: string | null;
   } | null,
-  netIncomeBeforeCca: number
-): number {
+  netIncomeBeforeCca: number,
+  context: { propertyId: number; propertyName?: string | null }
+): { amount: number; detail?: RentalTaxCcaLine } {
   if (!depreciationInfo) {
-    return 0;
+    return { amount: 0 };
   }
 
-  const rate = toNumber(depreciationInfo.ccaRate) / 100;
+  const ratePercent = toNumber(depreciationInfo.ccaRate);
+  const rate = ratePercent / 100;
   const opening = toNumber(depreciationInfo.openingUcc);
   const additions = toNumber(depreciationInfo.additions);
   const dispositions = toNumber(depreciationInfo.dispositions);
@@ -239,8 +715,26 @@ function calculateCca(
   const base = Math.max(0, opening + additions / 2 - dispositions);
   const ccaMax = Math.max(0, base * rate);
   const netIncome = Math.max(0, netIncomeBeforeCca);
+  const amount = round(Math.min(ccaMax, netIncome));
+  const closing = round(Math.max(0, opening + additions - dispositions - amount));
 
-  return round(Math.min(ccaMax, netIncome));
+  const detail: RentalTaxCcaLine = {
+    key: `cca-${context.propertyId}`,
+    classNumber: depreciationInfo.classCode ?? 'Immobilisations',
+    description: context.propertyName ?? 'Immeuble locatif',
+    ccaRate: ratePercent ? round(ratePercent, 2) : null,
+    openingBalance: round(opening),
+    additions: round(additions),
+    dispositions: round(dispositions),
+    baseForCca: round(base),
+    ccaAmount: amount,
+    closingBalance: closing
+  };
+
+  return {
+    amount,
+    detail
+  };
 }
 
 async function findPreviousStatement(
@@ -267,6 +761,27 @@ async function findPreviousStatement(
   return previous ? serializeRentalTaxStatement(previous) : null;
 }
 
+function normalizeMetadataField(field: RentalTaxMetadataField): RentalTaxMetadataField {
+  const value = field.value;
+  if (field.type === 'number') {
+    const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+    return {
+      ...field,
+      value: Number.isFinite(parsed) ? round(parsed) : 0
+    };
+  }
+
+  if (field.type === 'percentage') {
+    const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+    return {
+      ...field,
+      value: Number.isFinite(parsed) ? round(parsed, 2) : 0
+    };
+  }
+
+  return field;
+}
+
 function ensureTotals(payload: RentalTaxFormPayload): RentalTaxFormPayload {
   const grossRents = round(Math.max(0, payload.income.grossRents || 0));
   const otherIncome = round(Math.max(0, payload.income.otherIncome || 0));
@@ -279,12 +794,45 @@ function ensureTotals(payload: RentalTaxFormPayload): RentalTaxFormPayload {
   const netIncome = round(totalIncome - totalExpenses);
 
   return {
+    metadata: payload.metadata?.map(normalizeMetadataField),
     income: {
       grossRents,
       otherIncome,
       totalIncome
     },
+    incomeLabels: payload.incomeLabels,
     expenses,
+    cca: payload.cca?.map((line) => ({
+      ...line,
+      ccaRate:
+        line.ccaRate === null || line.ccaRate === undefined
+          ? null
+          : round(Number(line.ccaRate), 2),
+      openingBalance:
+        line.openingBalance === null || line.openingBalance === undefined
+          ? null
+          : round(Number(line.openingBalance)),
+      additions:
+        line.additions === null || line.additions === undefined
+          ? null
+          : round(Number(line.additions)),
+      dispositions:
+        line.dispositions === null || line.dispositions === undefined
+          ? null
+          : round(Number(line.dispositions)),
+      baseForCca:
+        line.baseForCca === null || line.baseForCca === undefined
+          ? null
+          : round(Number(line.baseForCca)),
+      ccaAmount:
+        line.ccaAmount === null || line.ccaAmount === undefined
+          ? null
+          : round(Number(line.ccaAmount)),
+      closingBalance:
+        line.closingBalance === null || line.closingBalance === undefined
+          ? null
+          : round(Number(line.closingBalance))
+    })),
     totals: {
       totalExpenses,
       netIncome
@@ -301,6 +849,20 @@ function serializeRentalTaxStatement(
     };
   }>
 ): RentalTaxStatementDto {
+  const rawComputed = statement.computed as unknown as Partial<RentalTaxComputedData>;
+  const computed: RentalTaxComputedData = {
+    grossRents: rawComputed?.grossRents ?? 0,
+    otherIncome: rawComputed?.otherIncome ?? 0,
+    totalIncome: rawComputed?.totalIncome ?? 0,
+    expenses: rawComputed?.expenses ?? [],
+    totalExpenses: rawComputed?.totalExpenses ?? 0,
+    netIncome: rawComputed?.netIncome ?? 0,
+    mortgageInterest: rawComputed?.mortgageInterest ?? 0,
+    capitalCostAllowance: rawComputed?.capitalCostAllowance ?? 0,
+    incomeDetails: rawComputed?.incomeDetails ?? [],
+    ccaDetails: rawComputed?.ccaDetails ?? []
+  };
+
   return {
     id: statement.id,
     formType: statement.formType,
@@ -309,7 +871,7 @@ function serializeRentalTaxStatement(
     propertyName: statement.property?.name ?? null,
     propertyAddress: statement.property?.address ?? null,
     payload: statement.payload as unknown as RentalTaxFormPayload,
-    computed: statement.computed as unknown as RentalTaxComputedData,
+    computed,
     notes: statement.notes ?? null,
     createdAt: statement.createdAt.toISOString(),
     updatedAt: statement.updatedAt.toISOString()
@@ -348,6 +910,8 @@ async function computeRentalTaxData(
   const expenseAccumulator = new Map<string, RentalTaxExpenseLine>();
   let mortgageInterest = 0;
   let capitalCostAllowance = 0;
+
+  const ccaDetails: RentalTaxCcaLine[] = [];
 
   properties.forEach((property) => {
     property.revenues.forEach((revenue) => {
@@ -436,7 +1000,14 @@ async function computeRentalTaxData(
 
     const expensesTotal = Array.from(expenseAccumulator.values()).reduce((acc, line) => acc + line.amount, 0);
     const netIncomeBeforeCca = grossRents + otherIncome - expensesTotal - mortgageInterest;
-    capitalCostAllowance += calculateCca(property.depreciationInfo, netIncomeBeforeCca);
+    const ccaResult = calculateCca(property.depreciationInfo, netIncomeBeforeCca, {
+      propertyId: property.id,
+      propertyName: property.name
+    });
+    capitalCostAllowance += ccaResult.amount;
+    if (ccaResult.detail) {
+      ccaDetails.push(ccaResult.detail);
+    }
   });
 
   if (mortgageInterest > 0) {
@@ -483,7 +1054,8 @@ async function computeRentalTaxData(
     netIncome,
     mortgageInterest: round(mortgageInterest),
     capitalCostAllowance: round(capitalCostAllowance),
-    incomeDetails: incomeDetails.sort((a, b) => a.label.localeCompare(b.label))
+    incomeDetails: incomeDetails.sort((a, b) => a.label.localeCompare(b.label)),
+    ccaDetails
   };
 
   return { computed, property };
@@ -503,20 +1075,15 @@ export async function prepareRentalTaxStatement(
   const { computed, property } = await computeRentalTaxData(userId, propertyId, taxYear);
   const previous = await findPreviousStatement(userId, input.formType, propertyId, taxYear);
 
-  const payloadTemplate = ensureTotals(
-    previous?.payload ?? {
-      income: {
-        grossRents: computed.grossRents,
-        otherIncome: computed.otherIncome,
-        totalIncome: computed.totalIncome
-      },
-      expenses: computed.expenses,
-      totals: {
-        totalExpenses: computed.totalExpenses,
-        netIncome: computed.netIncome
-      }
-    }
-  );
+  const basePayload = buildFormPayload({
+    formType: input.formType,
+    computed,
+    property,
+    taxYear,
+    previous: previous?.payload
+  });
+
+  const payloadTemplate = ensureTotals(basePayload);
 
   return {
     taxYear,

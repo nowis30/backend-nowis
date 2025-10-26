@@ -1127,31 +1127,178 @@ function renderRentalTaxStatementHtml({
   const scopeLabel = propertyName ? `${propertyName}${propertyAddress ? ` · ${propertyAddress}` : ''}` : 'Portefeuille complet';
   const headerSubtitle = `${formTitle} · Année ${taxYear}`;
 
-  const incomeRows = [
-    ['Revenus bruts de location', formatCurrency(payload.income.grossRents)],
-    ['Autres revenus', formatCurrency(payload.income.otherIncome)],
-    ['Total des revenus', formatCurrency(payload.income.totalIncome)]
-  ]
-    .map(
-      ([label, value]) => `
+  const numberFormatter = new Intl.NumberFormat('fr-CA', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+
+  const formatCurrencyOrDash = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? formatCurrency(value) : '—';
+
+  const formatRateOrDash = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} %` : '—';
+
+  const formatMetadataValue = (field: { value: string | number | null; type?: string }): string => {
+    const raw = field.value;
+    if (raw === null || raw === undefined) {
+      return '<span class="placeholder">—</span>';
+    }
+    if (typeof raw === 'number') {
+      if (field.type === 'percentage') {
+        return escapeHtml(`${numberFormatter.format(raw)} %`);
+      }
+      return escapeHtml(numberFormatter.format(raw));
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return '<span class="placeholder">—</span>';
+    }
+    if (field.type === 'percentage') {
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        return escapeHtml(`${numberFormatter.format(parsed)} %`);
+      }
+    }
+    if (field.type === 'textarea') {
+      return formatMultiline(trimmed);
+    }
+    return formatPlainText(trimmed);
+  };
+
+  const metadata = payload.metadata ?? [];
+  const metadataRows = metadata
+    .map((field) => {
+      const helperParts: string[] = [];
+      if (field.lineNumber) {
+        helperParts.push(`Ligne ${field.lineNumber}`);
+      }
+      if (field.hint) {
+        helperParts.push(field.hint);
+      }
+      const helper = helperParts.length
+        ? `<div class="meta-hint">${escapeHtml(helperParts.join(' · '))}</div>`
+        : '';
+      return `
         <tr>
-          <th>${escapeHtml(label)}</th>
-          <td>${escapeHtml(value)}</td>
+          <th>${escapeHtml(field.label)}</th>
+          <td>${formatMetadataValue(field)}${helper}</td>
         </tr>
-      `
-    )
+      `;
+    })
+    .join('');
+
+  const metadataSection = metadata.length
+    ? `
+      <section class="section">
+        <h2>Informations du formulaire</h2>
+        <table class="meta-table">
+          <tbody>
+            ${metadataRows}
+          </tbody>
+        </table>
+      </section>
+    `
+    : '';
+
+  const incomeRows = [
+    {
+      label: payload.incomeLabels?.grossRents ?? 'Revenus bruts de location',
+      value: payload.income.grossRents,
+      lineNumber: payload.incomeLabels?.grossRentsLine ?? null
+    },
+    {
+      label: payload.incomeLabels?.otherIncome ?? 'Autres revenus',
+      value: payload.income.otherIncome,
+      lineNumber: payload.incomeLabels?.otherIncomeLine ?? null
+    },
+    {
+      label: payload.incomeLabels?.totalIncome ?? 'Total des revenus',
+      value: payload.income.totalIncome,
+      lineNumber: payload.incomeLabels?.totalIncomeLine ?? null
+    }
+  ]
+    .map((item) => {
+      const lineBadge = item.lineNumber
+        ? `<span class="line-number">Ligne ${escapeHtml(item.lineNumber)}</span>`
+        : '';
+      return `
+        <tr>
+          <th>${escapeHtml(item.label)}${lineBadge}</th>
+          <td>${escapeHtml(formatCurrency(item.value))}</td>
+        </tr>
+      `;
+    })
     .join('');
 
   const expenseRows = payload.expenses
-    .map(
-      (expense) => `
+    .map((expense) => {
+      const detailParts: string[] = [];
+      if (expense.lineNumber) {
+        detailParts.push(`Ligne ${expense.lineNumber}`);
+      }
+      if (expense.hint) {
+        detailParts.push(expense.hint);
+      }
+      const details = detailParts.length
+        ? `<div class="hint">${escapeHtml(detailParts.join(' · '))}</div>`
+        : '';
+      const description = expense.description
+        ? `<div class="hint">${formatMultiline(expense.description)}</div>`
+        : '';
+      return `
         <tr>
-          <td>${escapeHtml(expense.label)}</td>
+          <td>
+            <div class="label">${escapeHtml(expense.label)}</div>
+            ${details}
+            ${description}
+          </td>
           <td>${formatCurrency(expense.amount)}</td>
         </tr>
-      `
-    )
+      `;
+    })
     .join('');
+
+  const ccaRows = (payload.cca ?? [])
+    .map((line) => `
+      <tr>
+        <td>${escapeHtml(line.classNumber ?? '—')}</td>
+        <td>${line.description ? formatPlainText(line.description) : '—'}</td>
+        <td>${formatRateOrDash(line.ccaRate)}</td>
+        <td>${formatCurrencyOrDash(line.openingBalance)}</td>
+        <td>${formatCurrencyOrDash(line.additions)}</td>
+        <td>${formatCurrencyOrDash(line.dispositions)}</td>
+        <td>${formatCurrencyOrDash(line.baseForCca)}</td>
+        <td>${formatCurrencyOrDash(line.ccaAmount)}</td>
+        <td>${formatCurrencyOrDash(line.closingBalance)}</td>
+      </tr>
+    `)
+    .join('');
+
+  const ccaSection = payload.cca && payload.cca.length
+    ? `
+      <section class="section">
+        <h2>Tableau CCA</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Classe</th>
+              <th>Description</th>
+              <th>Taux</th>
+              <th>Solde ouverture</th>
+              <th>Additions</th>
+              <th>Dispositions</th>
+              <th>Base admissible</th>
+              <th>CCA</th>
+              <th>Solde clôture</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ccaRows}
+          </tbody>
+        </table>
+      </section>
+    `
+    : '';
 
   const comparisonRows = [
     {
@@ -1323,6 +1470,51 @@ function renderRentalTaxStatementHtml({
             color: #6b7280;
             margin-top: 16px;
           }
+          .meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+          }
+          .meta-table th {
+            width: 35%;
+            text-align: left;
+            padding: 8px 12px;
+            background: #eef2ff;
+            color: #1f2937;
+            border-bottom: 1px solid #e5eaf2;
+          }
+          .meta-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5eaf2;
+            color: #334155;
+          }
+          .meta-hint {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+          }
+          .line-number {
+            display: inline-block;
+            margin-left: 8px;
+            background: #e0ecff;
+            color: #1d4ed8;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 999px;
+          }
+          .data-table .label {
+            font-weight: 600;
+            color: #1f2937;
+          }
+          .data-table .hint {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+          }
+          .placeholder {
+            color: #94a3b8;
+          }
         </style>
       </head>
       <body>
@@ -1349,6 +1541,8 @@ function renderRentalTaxStatementHtml({
           </div>
         </div>
 
+        ${metadataSection}
+
         <section class="section">
           <h2>Revenus de location</h2>
           <table>
@@ -1360,7 +1554,7 @@ function renderRentalTaxStatementHtml({
 
         <section class="section">
           <h2>Dépenses admissibles</h2>
-          <table>
+          <table class="data-table">
             <thead>
               <tr>
                 <th>Catégorie</th>
@@ -1378,6 +1572,8 @@ function renderRentalTaxStatementHtml({
             </tfoot>
           </table>
         </section>
+
+        ${ccaSection}
 
         <section class="section">
           <h2>Comparaison avec le calcul automatique</h2>
