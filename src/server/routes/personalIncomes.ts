@@ -103,11 +103,29 @@ personalIncomesRouter.get(
   '/shareholders',
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const shareholders = await prisma.shareholder.findMany({
+      let shareholders = await prisma.shareholder.findMany({
         where: { userId: req.userId },
         select: { id: true, displayName: true },
         orderBy: [{ displayName: 'asc' }]
       });
+
+      if (shareholders.length === 0) {
+        const user = await prisma.user.findUnique({
+          where: { id: req.userId! },
+          select: { email: true }
+        });
+
+        const createdShareholder = await prisma.shareholder.create({
+          data: {
+            userId: req.userId!,
+            displayName: 'Profil personnel',
+            contactEmail: user?.email ?? null
+          },
+          select: { id: true, displayName: true }
+        });
+
+        shareholders = [createdShareholder];
+      }
 
       res.json(shareholders);
     } catch (error) {
