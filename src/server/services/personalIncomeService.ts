@@ -100,13 +100,18 @@ export function summarizePersonalIncomes(
 
 export async function getPersonalIncomeSummary(shareholderId: number, taxYear: number) {
   // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
-  const records = await prisma.personalIncome.findMany({
+  const records = (await prisma.personalIncome.findMany({
     where: { shareholderId, taxYear },
     select: {
       category: true,
       amount: true
     }
-  });
+  })) as Array<{ category: string; amount: Prisma.Decimal | number }>;
 
-  return summarizePersonalIncomes(records);
+  const typedRecords = records.map((record) => ({
+    category: record.category as PersonalIncomeCategory,
+    amount: record.amount
+  }));
+
+  return summarizePersonalIncomes(typedRecords);
 }
