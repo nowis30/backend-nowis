@@ -1,0 +1,50 @@
+{
+  "baseUrl": "https://backend-nowis-1.onrender.com",
+  "payload": {
+    "label": "Validation 2025-10-27 21:26:06",
+    "sourceType": "HOME_EQUITY",
+    "principal": 100000,
+    "annualRate": 0.06,
+    "termMonths": 60,
+    "amortizationMonths": 300,
+    "startDate": "2025-10-27T21:26:06.939Z",
+    "investmentVehicle": "ETF",
+    "expectedReturnAnnual": 0.07,
+    "expectedVolatility": 0.15,
+    "planHorizonYears": 10,
+    "interestDeductible": true,
+    "marginalTaxRate": 0.45
+  },
+  "simOnly": {
+    "summary": {
+      "annualDebtService": 7731.616817826174,
+      "annualInterestCost": 5951.577879304737,
+      "afterTaxDebtCost": 3273.3678336176054,
+      "expectedInvestmentReturn": 7000.000000000001,
+      "netExpectedDelta": 3726.6321663823956,
+      "cashflowImpact": -731.6168178261732,
+      "breakEvenReturn": 0.032733678336176054,
+      "details": {
+        "monthlyPayment": 644.3014014855145,
+        "principalRepaidYearOne": 1780.0389385214366
+      }
+    }
+  },
+  "simSaved": {
+    "summary": {
+      "annualDebtService": 7731.616817826174,
+      "annualInterestCost": 5951.577879304737,
+      "afterTaxDebtCost": 3273.3678336176054,
+      "expectedInvestmentReturn": 7000.000000000001,
+      "netExpectedDelta": 3726.6321663823956,
+      "cashflowImpact": -731.6168178261732,
+      "breakEvenReturn": 0.032733678336176054,
+      "details": {
+        "monthlyPayment": 644.3014014855145,
+        "principalRepaidYearOne": 1780.0389385214366
+      }
+    },
+    "savedScenarioId": 1
+  },
+  "foundInList": true
+}

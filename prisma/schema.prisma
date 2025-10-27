@@ -33,6 +33,8 @@ model User {
   financialGoals           FinancialGoal[]
   leverageScenarios        LeverageScenario[]
   advisorConversations     AdvisorConversation[]
+  alertRules               AlertRule[]
+  alertEvents              AlertEvent[]
 }
 
 model Property {
@@ -1041,4 +1043,85 @@ model ValuationSnapshot {
 
   @@index([userId, valuationDate])
   @@index([companyId, valuationDate])
+}
+
+// Monitoring and alerting models
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertEventStatus {
+  TRIGGERED
+  RESOLVED
+  ACKNOWLEDGED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WEBHOOK
+  LOG
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model AlertRule {
+  id          Int            @id @default(autoincrement())
+  userId      Int
+  name        String
+  description String?
+  isActive    Boolean        @default(true)
+  severity    AlertSeverity  @default(INFO)
+  triggerType String
+  condition   Json
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events AlertEvent[]
+
+  @@index([userId, isActive])
+  @@index([userId, triggerType])
+}
+
+model AlertEvent {
+  id          Int               @id @default(autoincrement())
+  userId      Int
+  ruleId      Int
+  status      AlertEventStatus  @default(TRIGGERED)
+  payload     Json?
+  triggeredAt DateTime          @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rule          AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([userId, ruleId])
+  @@index([userId, status])
+  @@index([triggeredAt])
+}
+
+model Notification {
+  id        Int                 @id @default(autoincrement())
+  eventId   Int
+  channel   NotificationChannel
+  target    String?
+  status    NotificationStatus  @default(PENDING)
+  lastError String?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  event AlertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
 }

@@ -15,6 +15,7 @@
   "smoke:gpt": "ts-node ./src/scripts/smoke-gpt.ts",
   "smoke": "ts-node ./src/scripts/smoke.ts",
   "validate:leverage": "ts-node ./src/scripts/validate-leverage.ts",
+    "seed:monitoring": "ts-node ./src/scripts/seedMonitoring.ts",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
