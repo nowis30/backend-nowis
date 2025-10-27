@@ -49,6 +49,17 @@ export default tseslint.config(
       globals: {
         ...globals.jest
       }
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off'
+    }
+  }
+  ,
+  {
+    files: ['src/scripts/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-require-imports': 'off'
     }
   }
 );

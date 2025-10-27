@@ -31,6 +31,8 @@ model User {
   freezeSimulations        FreezeSimulation[]
   investmentAccounts       InvestmentAccount[]
   financialGoals           FinancialGoal[]
+  leverageScenarios        LeverageScenario[]
+  advisorConversations     AdvisorConversation[]
 }
 
 model Property {
@@ -84,6 +86,7 @@ model Company {
   leveragedBuybackScenarios LeveragedBuybackScenario[]
   valuationSnapshots       ValuationSnapshot[]
   freezeAssets             FreezeAsset[]
+  leverageScenarios        LeverageScenario[]
 }
 
 model Shareholder {
@@ -502,6 +505,97 @@ model FamilyWealthScenario {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, scenarioType])
+
+}
+
+enum LeverageSourceType {
+  HOME_EQUITY
+  RENTAL_PROPERTY
+  HELOC
+  CORPORATE_LOAN
+}
+
+enum LeverageInvestmentVehicle {
+  ETF
+  STOCK
+  REALESTATE
+  BUSINESS
+  FUND
+}
+
+model LeverageScenario {
+  id                  Int                        @id @default(autoincrement())
+  userId              Int
+  companyId           Int?
+  label               String
+  sourceType          LeverageSourceType
+  principal           Decimal                     @db.Decimal(18, 2)
+  rateAnnual          Decimal                     @db.Decimal(5, 4)
+  termMonths          Int
+  amortizationMonths  Int?
+  startDate           DateTime
+  interestDeductible  Boolean                     @default(false)
+  investmentVehicle   LeverageInvestmentVehicle
+  expectedReturnAnnual Decimal                    @db.Decimal(5, 4)
+  expectedVolatility  Decimal?                    @db.Decimal(5, 4)
+  planHorizonYears    Int                         @default(10)
+  notes               String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+enum AdvisorExpert {
+  FISCALISTE
+  COMPTABLE
+  PLANIFICATEUR
+  AVOCAT
+}
+
+enum AdvisorConversationRole {
+  USER
+  ASSISTANT
+}
+
+enum AdvisorConversationStatus {
+  ACTIVE
+  COMPLETED
+}
+
+model AdvisorConversation {
+  id        Int                       @id @default(autoincrement())
+  userId    Int
+  expert    AdvisorExpert
+  status    AdvisorConversationStatus @default(ACTIVE)
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+
+  user  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps AdvisorConversationStep[]
+
+  @@index([userId])
+  @@index([userId, expert])
+}
+
+model AdvisorConversationStep {
+  id             Int                    @id @default(autoincrement())
+  conversationId Int
+  role           AdvisorConversationRole
+  message        String
+  snapshot       Json?
+  updates        Json?
+  nextQuestion   Json?
+  completed      Boolean?
+  createdAt      DateTime               @default(now())
+
+  conversation AdvisorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
 }
 
 model FreezeAsset {

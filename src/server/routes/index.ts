@@ -26,6 +26,9 @@ import { financialGoalsRouter } from './financialGoals';
 import { personalAssetsRouter } from './personalAssets';
 import { personalLiabilitiesRouter } from './personalLiabilities';
 import { metricsRouter } from './metrics';
+import { leverageRouter } from './leverage';
+import { aiRouter } from './ai';
+import { monitoringRouter } from './monitoring';
 
 const routes = Router();
 
@@ -55,5 +58,8 @@ routes.use('/investments', investmentsRouter);
 routes.use('/financial-goals', financialGoalsRouter);
 routes.use('/profile', profileRouter);
 routes.use('/metrics', metricsRouter);
+routes.use('/leverage', leverageRouter);
+routes.use('/ai', aiRouter);
+routes.use('/monitoring', monitoringRouter);
 
 export { routes };

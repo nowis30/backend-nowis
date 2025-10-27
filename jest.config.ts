@@ -6,7 +6,7 @@ const config: Config = {
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js'],
   coverageDirectory: 'coverage',
-  maxWorkers: 2
+  maxWorkers: 1
 };
 
 export default config;

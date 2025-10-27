@@ -5,7 +5,8 @@ function ensureArray<T>(value: T | T[]): T[] {
 }
 
 export async function purgeUsersByIds(userIds: number | number[]): Promise<void> {
-  const ids = ensureArray(userIds);
+  const ids = ensureArray(userIds)
+    .filter((id): id is number => typeof id === 'number' && Number.isFinite(id));
   if (ids.length === 0) {
     return;
   }
@@ -32,6 +33,11 @@ export async function purgeUsersByIds(userIds: number | number[]): Promise<void>
   await prisma.personalAsset.deleteMany({ where: { userId: { in: ids } } });
   await prisma.personalLiability.deleteMany({ where: { userId: { in: ids } } });
   await prisma.personalExpense.deleteMany({ where: { userId: { in: ids } } });
+  await (prisma as any).leverageScenario.deleteMany({ where: { userId: { in: ids } } });
+  await (prisma as any).advisorConversationStep.deleteMany({
+    where: { conversation: { userId: { in: ids } } }
+  });
+  await (prisma as any).advisorConversation.deleteMany({ where: { userId: { in: ids } } });
 
   await prisma.freezeSimulationDividend.deleteMany({ where: { simulation: { userId: { in: ids } } } });
   await prisma.freezeSimulationRedemption.deleteMany({ where: { simulation: { userId: { in: ids } } } });
@@ -72,7 +78,9 @@ export async function purgeUsersByIds(userIds: number | number[]): Promise<void>
 }
 
 export async function purgeUsersByEmails(emails: string | string[]): Promise<void> {
-  const emailList = ensureArray(emails);
+  const emailList = ensureArray(emails)
+    .map((email) => email?.trim())
+    .filter((email): email is string => Boolean(email));
   if (emailList.length === 0) {
     return;
   }

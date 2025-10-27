@@ -38,8 +38,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  require('../index');
+  await import('../index');
 }
 
 void main();

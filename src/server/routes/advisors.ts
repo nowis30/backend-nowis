@@ -3,12 +3,19 @@ import { z } from 'zod';
 
 import { env } from '../env';
 import { advisorAccess } from '../middlewares/advisorAccess';
+import type { AuthenticatedRequest } from '../middlewares/authenticated';
 import { evaluateAdvisors, getAdvisorQuestions } from '../services/advisors/coordinator';
 import { runAvocatAdvisor } from '../services/advisors/avocat';
 import { runComptableAdvisor } from '../services/advisors/comptable';
 import { runFiscalisteAdvisor } from '../services/advisors/fiscaliste';
 import { askGptExpert, pingOpenAI } from '../services/advisors/gptEngine';
 import { nextConversationStep } from '../services/advisors/convoEngine';
+import {
+  listUserConversations,
+  loadConversationDetail,
+  persistConversationExchange,
+  updateConversationStatus
+} from '../services/advisors/conversationPersistence';
 import { parseFacts } from '../services/advisors/parser';
 import { runPlanificateurAdvisor } from '../services/advisors/planificateur';
 import type {
@@ -120,6 +127,7 @@ router.post('/ask', advisorAccess, async (req, res, next) => {
 // Flux conversationnel par spécialiste
 const convoSchema = z
   .object({
+    conversationId: z.coerce.number().int().positive().optional(),
     expertId: z.enum(['fiscaliste', 'comptable', 'planificateur', 'avocat']),
     message: z.string().trim().min(1),
     snapshot: z
@@ -131,7 +139,22 @@ const convoSchema = z
               name: z.string().min(1),
               address: z.string().optional().nullable(),
               acquisitionDate: z.string().optional().nullable(),
-              currentValue: z.number().optional().nullable()
+              currentValue: z.number().optional().nullable(),
+              purchasePrice: z.number().optional().nullable(),
+              notes: z.string().optional().nullable()
+            })
+          )
+          .optional()
+        ,
+        personalIncomes: z
+          .array(
+            z.object({
+              id: z.number().int().optional(),
+              shareholderName: z.string().optional().nullable(),
+              taxYear: z.number().int(),
+              category: z.string(),
+              label: z.string(),
+              amount: z.number()
             })
           )
           .optional()
@@ -140,11 +163,113 @@ const convoSchema = z
   })
   .strict();
 
+const convoListQuerySchema = z
+  .object({
+    expertId: z.enum(['fiscaliste', 'comptable', 'planificateur', 'avocat']).optional(),
+    status: z.enum(['active', 'completed']).optional()
+  })
+  .optional()
+  .default({});
+
+const convoIdParamSchema = z.object({
+  id: z.coerce.number().int().positive()
+});
+
+const convoStatusBodySchema = z.object({
+  status: z.enum(['active', 'completed'])
+});
+
 router.post('/convo', advisorAccess, async (req, res, next) => {
   try {
-    const { expertId, message, snapshot } = convoSchema.parse(req.body);
-    const result = await nextConversationStep(expertId, message, snapshot);
-    res.json(result);
+    const { conversationId, expertId, message, snapshot } = convoSchema.parse(req.body);
+    const step = await nextConversationStep(expertId, message, snapshot);
+
+    const { userId } = req as AuthenticatedRequest;
+
+    if (!userId) {
+      res.json({ conversationId: conversationId ?? null, ...step });
+      return;
+    }
+
+    const persisted = await persistConversationExchange({
+      userId,
+      expertId,
+      message,
+      snapshot,
+      response: step,
+      conversationId
+    });
+
+    res.json({ conversationId: persisted.conversationId, ...step });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/convo', advisorAccess, async (req, res, next) => {
+  try {
+    const filters = convoListQuerySchema.parse(req.query);
+    const { userId } = req as AuthenticatedRequest;
+
+    if (!userId) {
+      res.json({ conversations: [] });
+      return;
+    }
+
+    let conversations = await listUserConversations(userId);
+    if (filters.expertId) {
+      conversations = conversations.filter((item) => item.expertId === filters.expertId);
+    }
+    if (filters.status) {
+      conversations = conversations.filter((item) => item.status === filters.status);
+    }
+
+    res.json({ conversations });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/convo/:id', advisorAccess, async (req, res, next) => {
+  try {
+    const params = convoIdParamSchema.parse(req.params);
+    const { userId } = req as AuthenticatedRequest;
+
+    if (!userId) {
+      res.status(404).json({ error: 'Conversation introuvable.' });
+      return;
+    }
+
+    const detail = await loadConversationDetail(userId, params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Conversation introuvable.' });
+      return;
+    }
+
+    res.json(detail);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/convo/:id', advisorAccess, async (req, res, next) => {
+  try {
+    const params = convoIdParamSchema.parse(req.params);
+    const body = convoStatusBodySchema.parse(req.body);
+    const { userId } = req as AuthenticatedRequest;
+
+    if (!userId) {
+      res.status(404).json({ error: 'Conversation introuvable.' });
+      return;
+    }
+
+    const updated = await updateConversationStatus(userId, params.id, body.status);
+    if (!updated) {
+      res.status(404).json({ error: 'Conversation introuvable.' });
+      return;
+    }
+
+    res.json(updated);
   } catch (error) {
     next(error);
   }
