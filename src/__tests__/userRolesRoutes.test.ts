@@ -4,19 +4,22 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 
 const adminEmail = 'userroles-admin@nowis.local';
 const targetEmail = 'userroles-target@nowis.local';
 
 describe('UserRoles routes', () => {
+  jest.setTimeout(15000);
+
   let adminToken: string;
   let regularToken: string;
   let adminRoleId: number;
   let targetUserId: number;
+  let adminUserId: number;
 
   beforeAll(async () => {
-    await prisma.userRole.deleteMany({ where: { user: { email: { in: [adminEmail, targetEmail] } } } });
-    await prisma.user.deleteMany({ where: { email: { in: [adminEmail, targetEmail] } } });
+    await purgeUsersByEmails([adminEmail, targetEmail]);
 
     const adminRole = await prisma.role.upsert({
       where: { name: 'ADMIN' },
@@ -38,6 +41,8 @@ describe('UserRoles routes', () => {
         passwordHash: 'irrelevant'
       }
     });
+
+    adminUserId = adminUser.id;
 
     await prisma.userRole.create({
       data: {
@@ -67,8 +72,7 @@ describe('UserRoles routes', () => {
   });
 
   afterAll(async () => {
-    await prisma.userRole.deleteMany({ where: { user: { email: { in: [adminEmail, targetEmail] } } } });
-    await prisma.user.deleteMany({ where: { email: { in: [adminEmail, targetEmail] } } });
+    await purgeUsersByIds([adminUserId, targetUserId]);
   });
 
   it('refuse la création sans authentification', async () => {

@@ -1,32 +1,18 @@
 import { Router, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma';
 import { authenticated, AuthenticatedRequest } from '../middlewares/authenticated';
-import {
-  PERSONAL_INCOME_CATEGORIES,
-  type PersonalIncomeCategory,
-  getPersonalIncomeSummary
-} from '../services/personalIncomeService';
+import { PERSONAL_INCOME_CATEGORIES, getPersonalIncomeSummary } from '../services/personalIncomeService';
 
-type DecimalLike = unknown;
+const personalIncomeInclude = Prisma.validator<Prisma.PersonalIncomeInclude>()({
+  shareholder: { select: { id: true, displayName: true } }
+});
 
-type PersonalIncomeWithShareholder = {
-  id: number;
-  shareholderId: number;
-  taxYear: number;
-  category: PersonalIncomeCategory;
-  label: string;
-  source: string | null;
-  slipType: string | null;
-  amount: DecimalLike;
-  createdAt: Date;
-  updatedAt: Date;
-  shareholder: {
-    id: number;
-    displayName: string;
-  };
-};
+type PersonalIncomeWithShareholder = Prisma.PersonalIncomeGetPayload<{
+  include: typeof personalIncomeInclude;
+}>;
 
 const personalIncomesRouter = Router();
 
@@ -146,18 +132,15 @@ personalIncomesRouter.get('/', async (req: AuthenticatedRequest, res: Response, 
       }
     }
 
-  // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
-    const incomes = (await prisma.personalIncome.findMany({
+    const incomes = await prisma.personalIncome.findMany({
       where: {
         shareholder: { userId: req.userId },
         ...(shareholderId ? { shareholderId } : {}),
         ...(taxYear ? { taxYear } : {})
       },
-      include: {
-        shareholder: { select: { id: true, displayName: true } }
-      },
+      include: personalIncomeInclude,
       orderBy: [{ taxYear: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }]
-    })) as PersonalIncomeWithShareholder[];
+    });
 
     res.json(incomes.map(serialize));
   } catch (error) {
@@ -174,8 +157,7 @@ personalIncomesRouter.post('/', async (req: AuthenticatedRequest, res: Response,
       return res.status(404).json({ error: 'Actionnaire introuvable.' });
     }
 
-  // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
-    const created = (await prisma.personalIncome.create({
+    const created = await prisma.personalIncome.create({
       data: {
         shareholderId: payload.shareholderId,
         taxYear: payload.taxYear,
@@ -185,10 +167,8 @@ personalIncomesRouter.post('/', async (req: AuthenticatedRequest, res: Response,
         slipType: payload.slipType ?? null,
         amount: payload.amount
       },
-      include: {
-        shareholder: { select: { id: true, displayName: true } }
-      }
-    })) as PersonalIncomeWithShareholder;
+      include: personalIncomeInclude
+    });
 
     res.status(201).json(serialize(created));
   } catch (error) {
@@ -208,7 +188,6 @@ personalIncomesRouter.put(
         return res.status(404).json({ error: 'Actionnaire introuvable.' });
       }
 
-  // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
       const existing = await prisma.personalIncome.findFirst({
         where: { id, shareholder: { userId: req.userId } }
       });
@@ -217,8 +196,7 @@ personalIncomesRouter.put(
         return res.status(404).json({ error: 'Revenu personnel introuvable.' });
       }
 
-  // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
-      const updated = (await prisma.personalIncome.update({
+      const updated = await prisma.personalIncome.update({
         where: { id },
         data: {
           shareholderId: payload.shareholderId,
@@ -229,10 +207,8 @@ personalIncomesRouter.put(
           slipType: payload.slipType ?? null,
           amount: payload.amount
         },
-        include: {
-          shareholder: { select: { id: true, displayName: true } }
-        }
-      })) as PersonalIncomeWithShareholder;
+        include: personalIncomeInclude
+      });
 
       res.json(serialize(updated));
     } catch (error) {
@@ -247,7 +223,6 @@ personalIncomesRouter.delete(
     try {
       const { id } = idParamSchema.parse(req.params);
 
-  // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
       const deleted = await prisma.personalIncome.deleteMany({
         where: { id, shareholder: { userId: req.userId } }
       });

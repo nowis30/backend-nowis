@@ -4,15 +4,18 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 
 describe('Invoices integration', () => {
+  jest.setTimeout(15000);
+
   const email = 'invoice-summary@nowis.local';
   let token: string;
   let userId: number;
   let propertyId: number;
 
   beforeAll(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+  await purgeUsersByEmails(email);
 
     const user = await prisma.user.create({
       data: {
@@ -44,10 +47,7 @@ describe('Invoices integration', () => {
   });
 
   afterAll(async () => {
-    await prisma.invoice.deleteMany({ where: { property: { userId } } });
-    await prisma.revenue.deleteMany({ where: { property: { userId } } });
-    await prisma.property.deleteMany({ where: { userId } });
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await purgeUsersByIds(userId);
   });
 
   it("crée une facture avec date simplifiée et l'intègre au résumé", async () => {

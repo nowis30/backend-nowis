@@ -132,16 +132,17 @@ async function aggregateCompanyValuations(
   return { companyValue, companyDetails };
 }
 
+const personalAssetSelect = Prisma.validator<Prisma.PersonalAssetSelect>()({
+  valuation: true,
+  category: true,
+  liquidityTag: true
+});
+
 async function aggregatePersonalAssets(userId: number) {
-  // @ts-ignore -- Prisma client will expose personalAsset after code generation
   const assets = await prisma.personalAsset.findMany({
     where: { userId },
-    select: {
-      valuation: true,
-      category: true,
-      liquidityTag: true
-    }
-  }) as Array<{ valuation: Prisma.Decimal | number; category: string | null; liquidityTag: string | null }>;
+    select: personalAssetSelect
+  });
 
   let personalAssetsValue = 0;
   let liquidAssetsValue = 0;
@@ -158,28 +159,30 @@ async function aggregatePersonalAssets(userId: number) {
   return { personalAssetsValue, liquidAssetsValue };
 }
 
+const personalLiabilitySelect = Prisma.validator<Prisma.PersonalLiabilitySelect>()({
+  balance: true
+});
+
 async function aggregatePersonalLiabilities(userId: number) {
-  // @ts-ignore -- Prisma client will expose personalLiability after code generation
   const liabilities = await prisma.personalLiability.findMany({
     where: { userId },
-    select: {
-      balance: true
-    }
-  }) as Array<{ balance: Prisma.Decimal | number }>;
+    select: personalLiabilitySelect
+  });
 
   return liabilities.reduce<number>((total, liability) => roundCurrency(total + decimalToNumber(liability.balance)), 0);
 }
 
+const familyTrustSelect = Prisma.validator<Prisma.FamilyTrustSelect>()({
+  id: true,
+  name: true,
+  netAssetValue: true
+});
+
 async function aggregateFamilyTrusts(userId: number) {
-  // @ts-ignore -- Prisma client will expose familyTrust after code generation
   const trusts = await prisma.familyTrust.findMany({
     where: { userId },
-    select: {
-      id: true,
-      name: true,
-      netAssetValue: true
-    }
-  }) as Array<{ id: number; name: string; netAssetValue: Prisma.Decimal | number }>;
+    select: familyTrustSelect
+  });
 
   let trustValue = 0;
   const details: Array<{ trustId: number; name: string; netAssetValue: number }> = [];
@@ -405,17 +408,18 @@ export async function buildFamilyWealthOverview(
 
   const netWorth = roundCurrency(totalAssets - totalLiabilities);
 
-  // @ts-ignore -- Prisma client will expose personalIncome after code generation
+  const personalIncomeSelect = Prisma.validator<Prisma.PersonalIncomeSelect>()({
+    category: true,
+    amount: true
+  });
+
   const incomeRecords = await prisma.personalIncome.findMany({
     where: {
       taxYear: targetYear,
       shareholder: { userId }
     },
-    select: {
-      category: true,
-      amount: true
-    }
-  }) as Array<{ category: string; amount: Prisma.Decimal | number }>;
+    select: personalIncomeSelect
+  });
 
   const incomeMixBase = buildIncomeMix(
     incomeRecords.map((record) => ({
@@ -497,7 +501,6 @@ export async function buildFamilyWealthOverview(
   };
 
   if (options.persistSnapshot) {
-    // @ts-ignore -- Prisma client will expose familyWealthSnapshot after code generation
     await prisma.familyWealthSnapshot.upsert({
       where: {
         userId_snapshotDate: {
@@ -554,17 +557,10 @@ export interface FamilyWealthHistoryPoint {
 }
 
 export async function buildFamilyWealthHistory(userId: number): Promise<FamilyWealthHistoryPoint[]> {
-  // @ts-ignore -- Prisma client will expose familyWealthSnapshot after code generation
   const snapshots = await prisma.familyWealthSnapshot.findMany({
     where: { userId },
     orderBy: [{ snapshotDate: 'asc' }, { id: 'asc' }]
-  }) as Array<{
-    snapshotDate: Date;
-    netWorth: Prisma.Decimal | number;
-    totalAssets: Prisma.Decimal | number;
-    totalLiabilities: Prisma.Decimal | number;
-    metadata: Prisma.JsonValue | null;
-  }>;
+  });
 
   return snapshots.map((snapshot) => ({
     snapshotDate: snapshot.snapshotDate.toISOString(),
@@ -633,7 +629,6 @@ export async function runFamilyWealthScenario(
   let persistedId: number | undefined;
 
   if (options.persist) {
-    // @ts-ignore -- Prisma client will expose familyWealthScenario after code generation
     const created = await prisma.familyWealthScenario.create({
       data: {
         userId,
@@ -717,24 +712,18 @@ export async function runFamilyWealthStressTest(
 }
 
 export async function listFamilyWealthScenarios(userId: number): Promise<FamilyWealthScenarioResult[]> {
-  // @ts-ignore -- Prisma client will expose familyWealthScenario after code generation
   const scenarios = await prisma.familyWealthScenario.findMany({
     where: { userId },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
-  }) as Array<{
-    id: number;
-    label: string;
-    scenarioType: string;
-    parameters: Prisma.JsonValue | null;
-    results: Prisma.JsonValue | null;
-    metadata: Prisma.JsonValue | null;
-  }>;
+  });
 
   return scenarios.map((scenario) => {
     const timeline = Array.isArray((scenario.results as { timeline?: unknown } | null)?.timeline)
       ? ((scenario.results as { timeline: Array<{ year: number; projectedNetWorth: number }> }).timeline)
       : projectNetWorthOverHorizon(
-          decimalToNumber((scenario.metadata as { baseNetWorth?: number } | null)?.baseNetWorth ?? 0),
+          decimalToNumber(
+            ((scenario as { metadata?: Prisma.JsonValue | null }).metadata as { baseNetWorth?: number } | null)?.baseNetWorth ?? 0
+          ),
           {
             label: scenario.label,
             scenarioType: scenario.scenarioType,
@@ -758,7 +747,6 @@ export async function listFamilyWealthScenarios(userId: number): Promise<FamilyW
 }
 
 export async function deleteFamilyWealthScenario(userId: number, scenarioId: number): Promise<boolean> {
-  // @ts-ignore -- Prisma client will expose familyWealthScenario after code generation
   const result = await prisma.familyWealthScenario.deleteMany({
     where: { id: scenarioId, userId }
   });

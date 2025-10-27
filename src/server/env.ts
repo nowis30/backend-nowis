@@ -16,7 +16,20 @@ const envSchema = z.object({
   OPENAI_PROVIDER: z.enum(['openai', 'azure']).optional(),
   OPENAI_AZURE_DEPLOYMENT: z.string().optional(),
   OPENAI_API_VERSION: z.string().optional(),
-  ADVISOR_PORTAL_API_KEY: z.string().optional()
+  ADVISOR_PORTAL_API_KEY: z.string().optional(),
+  ENABLE_WEALTH_SNAPSHOT_JOB: z
+    .preprocess((value) => {
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        return ['1', 'true', 'yes', 'on'].includes(normalized);
+      }
+      return undefined;
+    }, z.boolean())
+    .default(false),
+  WEALTH_SNAPSHOT_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(720)
 });
 
 export const env = envSchema.parse(process.env);

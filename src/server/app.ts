@@ -5,6 +5,7 @@ import pinoHttp from 'pino-http';
 import rateLimit from 'express-rate-limit';
 
 import { routes } from './routes/index';
+import { logger } from './lib/logger';
 import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
@@ -25,7 +26,7 @@ const apiLimiter = rateLimit({
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
-app.use(pinoHttp());
+app.use(pinoHttp({ logger }));
 
 app.use('/api', apiLimiter, routes);
 

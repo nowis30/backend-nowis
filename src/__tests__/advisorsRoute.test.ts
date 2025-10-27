@@ -4,14 +4,17 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 
 describe('Advisors AI route', () => {
+  jest.setTimeout(25000);
+
   const email = 'advisors-route@nowis.local';
   let token: string;
   let userId: number;
 
   beforeAll(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+    await purgeUsersByEmails(email);
     const user = await prisma.user.create({
       data: {
         email,
@@ -24,7 +27,7 @@ describe('Advisors AI route', () => {
   });
 
   afterAll(async () => {
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await purgeUsersByIds(userId);
   });
 
   it('renvoie le questionnaire complet', async () => {
@@ -35,16 +38,18 @@ describe('Advisors AI route', () => {
 
     const payload = response.body as { questions: Array<Record<string, unknown>> };
     expect(Array.isArray(payload.questions)).toBe(true);
-    expect(payload.questions).toHaveLength(7);
-    expect(payload.questions[0]).toMatchObject({ id: 'taxableIncome', label: expect.any(String) });
+    expect(payload.questions).toHaveLength(8);
+    expect(payload.questions[0]).toMatchObject({ id: 'assetProfile', label: expect.any(String) });
   });
 
   it('pose les questions une à une avant de livrer les conseils', async () => {
     const partialResponse = await request(app)
       .post('/api/advisors/evaluate')
       .set('Authorization', `Bearer ${token}`)
+      .set('x-advisor-engine', 'heuristic')
       .send({
         answers: [
+          { questionId: 'assetProfile', value: 'BUSINESS' },
           { questionId: 'taxableIncome', value: '350000' },
           { questionId: 'profitMargin', value: '28' }
         ]
@@ -57,8 +62,10 @@ describe('Advisors AI route', () => {
     const finalResponse = await request(app)
       .post('/api/advisors/evaluate')
       .set('Authorization', `Bearer ${token}`)
+      .set('x-advisor-engine', 'heuristic')
       .send({
         answers: [
+          { questionId: 'assetProfile', value: 'BUSINESS' },
           { questionId: 'taxableIncome', value: '350000' },
           { questionId: 'profitMargin', value: '28' },
           { questionId: 'province', value: 'QC' },

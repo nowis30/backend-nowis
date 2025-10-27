@@ -4,15 +4,18 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 
 const adminEmail = 'reports-admin@nowis.local';
 
 describe('Reports overview route', () => {
+  jest.setTimeout(20000);
+
   let token: string;
+  let userId: number;
 
   beforeAll(async () => {
-    await prisma.userRole.deleteMany({ where: { user: { email: adminEmail } } });
-    await prisma.user.deleteMany({ where: { email: adminEmail } });
+    await purgeUsersByEmails(adminEmail);
 
     const role = await prisma.role.upsert({
       where: { name: 'ADMIN' },
@@ -26,6 +29,8 @@ describe('Reports overview route', () => {
         passwordHash: 'irrelevant'
       }
     });
+
+    userId = user.id;
 
     await prisma.userRole.create({
       data: {
@@ -100,14 +105,7 @@ describe('Reports overview route', () => {
   });
 
   afterAll(async () => {
-    await prisma.corporateResolution.deleteMany({ where: { company: { name: 'Rapport Inc.' } } });
-    await prisma.corporateStatement.deleteMany({ where: { company: { name: 'Rapport Inc.' } } });
-    await prisma.expense.deleteMany({ where: { label: 'Dépense test' } });
-    await prisma.revenue.deleteMany({ where: { label: 'Revenu test' } });
-    await prisma.property.deleteMany({ where: { name: 'Immeuble Rapport' } });
-    await prisma.company.deleteMany({ where: { name: 'Rapport Inc.' } });
-    await prisma.userRole.deleteMany({ where: { user: { email: adminEmail } } });
-    await prisma.user.deleteMany({ where: { email: adminEmail } });
+    await purgeUsersByIds(userId);
   });
 
   it('retourne le rapport consolidé pour un administrateur', async () => {

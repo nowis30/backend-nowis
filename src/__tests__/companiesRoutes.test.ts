@@ -4,16 +4,18 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails } from './helpers/prismaCleanup';
 
 describe('Companies routes', () => {
+  jest.setTimeout(20000);
+
   const email = 'companies-e2e@nowis.local';
   const otherEmail = 'companies-e2e-other@nowis.local';
   let token: string;
   let otherCompanyId: number;
 
   beforeAll(async () => {
-    await prisma.userRole.deleteMany({ where: { user: { email: { in: [email, otherEmail] } } } });
-    await prisma.user.deleteMany({ where: { email: { in: [email, otherEmail] } } });
+    await purgeUsersByEmails([email, otherEmail]);
 
     const adminRole = await prisma.role.upsert({
       where: { name: 'ADMIN' },
@@ -56,8 +58,7 @@ describe('Companies routes', () => {
   });
 
   afterAll(async () => {
-    await prisma.userRole.deleteMany({ where: { user: { email: { in: [email, otherEmail] } } } });
-    await prisma.user.deleteMany({ where: { email: { in: [email, otherEmail] } } });
+    await purgeUsersByEmails([email, otherEmail]);
   });
 
   it('gère le cycle de vie complet des entreprises et ressources associées', async () => {

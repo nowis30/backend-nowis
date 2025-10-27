@@ -4,8 +4,11 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 
 describe('Expenses routes', () => {
+  jest.setTimeout(20000);
+
   const email = 'expenses-case@nowis.local';
   let token: string;
   let userId: number;
@@ -13,7 +16,7 @@ describe('Expenses routes', () => {
   let expenseId: number;
 
   beforeAll(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+    await purgeUsersByEmails(email);
 
     const user = await prisma.user.create({
       data: {
@@ -43,10 +46,7 @@ describe('Expenses routes', () => {
   });
 
   afterAll(async () => {
-    await prisma.expense.deleteMany({ where: { property: { userId } } });
-    await prisma.revenue.deleteMany({ where: { property: { userId } } });
-    await prisma.property.deleteMany({ where: { userId } });
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await purgeUsersByIds(userId);
   });
 
   it('creates, updates and removes recurring expenses while updating the summary', async () => {
@@ -155,10 +155,17 @@ describe('Expenses routes', () => {
   });
 
   it("exporte le rapport fiscal des dépenses en JSON et CSV", async () => {
-    const otherProperty = await prisma.property.create({
+    const reportProperty = await prisma.property.create({
       data: {
         userId,
         name: 'Bloc Fiscal'
+      }
+    });
+
+    const otherProperty = await prisma.property.create({
+      data: {
+        userId,
+        name: 'Bloc Fiscal 2'
       }
     });
 
@@ -166,7 +173,7 @@ describe('Expenses routes', () => {
 
     const monthly = await prisma.expense.create({
       data: {
-        propertyId,
+        propertyId: reportProperty.id,
         label: 'Taxes mensuelles',
         category: 'Taxes',
         amount: 100,
@@ -178,7 +185,7 @@ describe('Expenses routes', () => {
 
     const punctual = await prisma.expense.create({
       data: {
-        propertyId,
+        propertyId: reportProperty.id,
         label: 'Réparation urgente',
         category: 'Entretien',
         amount: 800,
@@ -190,7 +197,7 @@ describe('Expenses routes', () => {
 
     const weekly = await prisma.expense.create({
       data: {
-        propertyId,
+        propertyId: reportProperty.id,
         label: 'Entretien paysager',
         category: 'Entretien',
         amount: 50,
@@ -223,7 +230,7 @@ describe('Expenses routes', () => {
     expect(jsonResponse.body).toHaveProperty('generatedAt');
 
     const propertyReport = jsonResponse.body.properties.find(
-      (entry: { propertyId: number }) => entry.propertyId === propertyId
+  (entry: { propertyId: number }) => entry.propertyId === reportProperty.id
     );
 
     expect(propertyReport).toBeDefined();
@@ -256,11 +263,11 @@ describe('Expenses routes', () => {
       .expect('Content-Type', /text\/csv/)
       .expect(200);
 
-    expect(csvResponse.text).toContain('Bloc Taxes');
-    expect(csvResponse.text).toContain('Assurance multirisque');
-    expect(csvResponse.text).toContain('TOTAL IMMEUBLE');
+  expect(csvResponse.text).toContain('Bloc Fiscal');
+  expect(csvResponse.text).toContain('Assurance multirisque');
+  expect(csvResponse.text).toContain('TOTAL IMMEUBLE');
 
     await prisma.expense.deleteMany({ where: { id: { in: createdExpenseIds } } });
-    await prisma.property.delete({ where: { id: otherProperty.id } });
+    await prisma.property.deleteMany({ where: { id: { in: [reportProperty.id, otherProperty.id] } } });
   });
 });

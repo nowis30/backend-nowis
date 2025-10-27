@@ -73,9 +73,6 @@ function computeCoordinatorSummary(outputs: AdvisorModuleOutput[]): string {
 
 type AdvisorResultCore = Omit<AdvisorResult, 'engine'>;
 
-const GPT_SIMULATION_NOTE =
-  "Mode GPT simulé : les réponses proviennent encore des heuristiques internes le temps d'intégrer GPT.";
-
 function buildHeuristicCore(answers: AdvisorAnswer[]): AdvisorResultCore {
   const nextQuestion = determineNextQuestion(answers);
   const completed = !nextQuestion;

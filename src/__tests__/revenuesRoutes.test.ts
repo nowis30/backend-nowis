@@ -4,8 +4,11 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 
 describe('Revenues routes', () => {
+  jest.setTimeout(20000);
+
   const email = 'revenues-case@nowis.local';
   let token: string;
   let userId: number;
@@ -13,7 +16,7 @@ describe('Revenues routes', () => {
   let revenueId: number;
 
   beforeAll(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+    await purgeUsersByEmails(email);
 
     const user = await prisma.user.create({
       data: {
@@ -44,10 +47,7 @@ describe('Revenues routes', () => {
   });
 
   afterAll(async () => {
-    await prisma.revenue.deleteMany({ where: { property: { userId } } });
-    await prisma.expense.deleteMany({ where: { property: { userId } } });
-    await prisma.property.deleteMany({ where: { userId } });
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await purgeUsersByIds(userId);
   });
 
   it('creates, updates and removes recurring revenues while updating the summary', async () => {

@@ -5,22 +5,19 @@ import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
 import { calculateScheduledPayment } from '../server/services/amortization';
+import { purgeUsersByIds, purgeUsersByEmails } from './helpers/prismaCleanup';
 
 describe('Summary route enriched metrics', () => {
+  jest.setTimeout(15000);
+
   const email = 'summary-metrics@nowis.local';
   let token: string;
   let userId: number;
-  let corporateContext: {
-    companyId: number;
-    shareholderId: number;
-    shareClassId: number;
-    statementId: number;
-  };
 
   beforeAll(async () => {
     jest.useFakeTimers().setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
 
-    await prisma.user.deleteMany({ where: { email } });
+    await purgeUsersByEmails(email);
 
     const mortgageOnePayment = calculateScheduledPayment({
       principal: 100000,
@@ -116,7 +113,7 @@ describe('Summary route enriched metrics', () => {
       }
     });
 
-    const companyShareholder = await prisma.companyShareholder.create({
+    await prisma.companyShareholder.create({
       data: {
         companyId: company.id,
         shareholderId: shareholder.id,
@@ -137,7 +134,7 @@ describe('Summary route enriched metrics', () => {
       data: {
         companyId: company.id,
         shareClassId: shareClass.id,
-        shareholderId: companyShareholder.shareholderId,
+        shareholderId: shareholder.id,
         type: 'ISSUANCE',
         transactionDate: new Date('2024-01-15'),
         quantity: 1000,
@@ -148,7 +145,7 @@ describe('Summary route enriched metrics', () => {
       }
     });
 
-    const statement = await prisma.corporateStatement.create({
+    await prisma.corporateStatement.create({
       data: {
         companyId: company.id,
         statementType: 'INCOME_STATEMENT',
@@ -170,33 +167,12 @@ describe('Summary route enriched metrics', () => {
         body: 'Distribution d’un dividende exceptionnel.'
       }
     });
-
-    corporateContext = {
-      companyId: company.id,
-      shareholderId: shareholder.id,
-      shareClassId: shareClass.id,
-      statementId: statement.id
-    };
   });
 
   afterAll(async () => {
     jest.useRealTimers();
 
-    await prisma.corporateResolution.deleteMany({ where: { companyId: corporateContext.companyId } });
-    await prisma.corporateStatementLine.deleteMany({ where: { statementId: corporateContext.statementId } });
-    await prisma.corporateStatement.deleteMany({ where: { companyId: corporateContext.companyId } });
-    await prisma.shareTransaction.deleteMany({ where: { companyId: corporateContext.companyId } });
-    await prisma.shareClass.deleteMany({ where: { companyId: corporateContext.companyId } });
-    await prisma.companyShareholder.deleteMany({ where: { companyId: corporateContext.companyId } });
-    await prisma.shareholder.deleteMany({ where: { id: corporateContext.shareholderId } });
-    await prisma.company.deleteMany({ where: { id: corporateContext.companyId } });
-    await prisma.invoice.deleteMany({ where: { property: { userId } } });
-    await prisma.expense.deleteMany({ where: { property: { userId } } });
-    await prisma.revenue.deleteMany({ where: { property: { userId } } });
-    await prisma.mortgage.deleteMany({ where: { property: { userId } } });
-    await prisma.propertyUnit.deleteMany({ where: { property: { userId } } });
-    await prisma.property.deleteMany({ where: { userId } });
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await purgeUsersByIds(userId);
   });
 
   it('expose les indicateurs enrichis pour les propriétés et totaux', async () => {

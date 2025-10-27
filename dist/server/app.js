@@ -10,6 +10,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const pino_http_1 = __importDefault(require("pino-http"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const index_1 = require("./routes/index");
+const logger_1 = require("./lib/logger");
 const errorHandler_1 = require("./middlewares/errorHandler");
 const app = (0, express_1.default)();
 exports.app = app;
@@ -27,7 +28,7 @@ const apiLimiter = (0, express_rate_limit_1.default)({
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
 app.use(express_1.default.json());
-app.use((0, pino_http_1.default)());
+app.use((0, pino_http_1.default)({ logger: logger_1.logger }));
 app.use('/api', apiLimiter, index_1.routes);
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

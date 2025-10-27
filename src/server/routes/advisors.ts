@@ -106,7 +106,6 @@ router.post('/ask', advisorAccess, async (req, res, next) => {
         return res.json(gptResponse);
       } catch (error) {
         // GPT indisponible : on continue avec une réponse heuristique.
-        // eslint-disable-next-line no-console
         console.warn('askGptExpert failed, falling back to heuristics:', error);
       }
     }

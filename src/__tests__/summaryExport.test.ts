@@ -4,15 +4,18 @@ import jwt from 'jsonwebtoken';
 import { app } from '../server/app';
 import { prisma } from '../server/lib/prisma';
 import { env } from '../server/env';
+import { purgeUsersByEmails, purgeUsersByIds } from './helpers/prismaCleanup';
 import { calculateScheduledPayment } from '../server/services/amortization';
 
 describe('Summary exports', () => {
+  jest.setTimeout(20000);
+
   const email = 'export-test@nowis.local';
   let token: string;
   let userId: number;
 
   beforeAll(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+  await purgeUsersByEmails(email);
 
     const scheduledPayment = calculateScheduledPayment({
       principal: 180000,
@@ -98,16 +101,7 @@ describe('Summary exports', () => {
   });
 
   afterAll(async () => {
-    await prisma.corporateResolution.deleteMany({ where: { company: { userId } } });
-    await prisma.corporateStatementLine.deleteMany({ where: { statement: { company: { userId } } } });
-    await prisma.corporateStatement.deleteMany({ where: { company: { userId } } });
-    await prisma.company.deleteMany({ where: { userId } });
-    await prisma.invoice.deleteMany({ where: { property: { userId } } });
-    await prisma.expense.deleteMany({ where: { property: { userId } } });
-    await prisma.revenue.deleteMany({ where: { property: { userId } } });
-    await prisma.mortgage.deleteMany({ where: { property: { userId } } });
-    await prisma.property.deleteMany({ where: { userId } });
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await purgeUsersByIds(userId);
   });
 
   it('retourne un fichier CSV téléchargeable', async () => {

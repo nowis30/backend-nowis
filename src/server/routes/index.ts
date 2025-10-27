@@ -18,6 +18,14 @@ import { leveragedBuybackRouter } from './leveragedBuyback';
 import { valuationRouter } from './valuation';
 import { personalIncomesRouter } from './personalIncomes';
 import { wealthRouter } from './wealth';
+import { freezeRouter } from './freeze';
+import { profileRouter } from './profile';
+import { personalExpensesRouter } from './personalExpenses';
+import { investmentsRouter } from './investments';
+import { financialGoalsRouter } from './financialGoals';
+import { personalAssetsRouter } from './personalAssets';
+import { personalLiabilitiesRouter } from './personalLiabilities';
+import { metricsRouter } from './metrics';
 
 const routes = Router();
 
@@ -38,6 +46,14 @@ routes.use('/advisors', advisorsRouter);
 routes.use('/leveraged-buyback', leveragedBuybackRouter);
 routes.use('/valuation', valuationRouter);
 routes.use('/personal-incomes', personalIncomesRouter);
+routes.use('/personal-assets', personalAssetsRouter);
+routes.use('/personal-liabilities', personalLiabilitiesRouter);
+routes.use('/personal-expenses', personalExpensesRouter);
 routes.use('/wealth', wealthRouter);
+routes.use('/freeze', freezeRouter);
+routes.use('/investments', investmentsRouter);
+routes.use('/financial-goals', financialGoalsRouter);
+routes.use('/profile', profileRouter);
+routes.use('/metrics', metricsRouter);
 
 export { routes };

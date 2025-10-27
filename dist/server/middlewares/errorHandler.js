@@ -10,6 +10,10 @@ function errorHandler(err, _req, res, _next) {
         });
     }
     const message = err instanceof Error ? err.message : 'Erreur interne';
+    if (err instanceof Error) {
+        // Log unexpected errors for easier diagnostics during tests.
+        console.error(err);
+    }
     const status = err instanceof Error && 'status' in err ? Number(err.status) : 500;
     res.status(Number.isNaN(status) ? 500 : status).json({ error: message });
 }

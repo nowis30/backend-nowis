@@ -2,6 +2,11 @@ import { Prisma } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
 
+const personalIncomeSelect = Prisma.validator<Prisma.PersonalIncomeSelect>()({
+  category: true,
+  amount: true
+});
+
 export const PERSONAL_INCOME_CATEGORIES = [
   'EMPLOYMENT',
   'PENSION',
@@ -99,14 +104,10 @@ export function summarizePersonalIncomes(
 }
 
 export async function getPersonalIncomeSummary(shareholderId: number, taxYear: number) {
-  // @ts-ignore -- Prisma client will expose personalIncome after generating the new schema
-  const records = (await prisma.personalIncome.findMany({
+  const records = await prisma.personalIncome.findMany({
     where: { shareholderId, taxYear },
-    select: {
-      category: true,
-      amount: true
-    }
-  })) as Array<{ category: string; amount: Prisma.Decimal | number }>;
+    select: personalIncomeSelect
+  });
 
   const typedRecords = records.map((record) => ({
     category: record.category as PersonalIncomeCategory,

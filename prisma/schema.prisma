@@ -22,9 +22,15 @@ model User {
   valuationSnapshots       ValuationSnapshot[]
   personalAssets           PersonalAsset[]
   personalLiabilities      PersonalLiability[]
+  personalExpenses         PersonalExpense[]
   familyTrusts             FamilyTrust[]
   familyWealthSnapshots    FamilyWealthSnapshot[]
   familyWealthScenarios    FamilyWealthScenario[]
+  freezeAssets             FreezeAsset[]
+  freezeScenarios          FreezeScenario[]
+  freezeSimulations        FreezeSimulation[]
+  investmentAccounts       InvestmentAccount[]
+  financialGoals           FinancialGoal[]
 }
 
 model Property {
@@ -49,6 +55,7 @@ model Property {
   depreciationInfo DepreciationSetting?
   attachments      Attachment[]
   rentalTaxStatements RentalTaxStatement[]
+  freezeAssets       FreezeAsset[]
 }
 
 model Company {
@@ -76,6 +83,7 @@ model Company {
   corporateTaxReturns CorporateTaxReturn[]
   leveragedBuybackScenarios LeveragedBuybackScenario[]
   valuationSnapshots       ValuationSnapshot[]
+  freezeAssets             FreezeAsset[]
 }
 
 model Shareholder {
@@ -86,6 +94,7 @@ model Shareholder {
   contactEmail  String?
   contactPhone  String?
   notes         String?
+  lifetimeCapitalGainsExemptionRemaining Decimal?
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
@@ -98,6 +107,7 @@ model Shareholder {
   personalTaxReturns PersonalTaxReturn[]
   personalIncomes   PersonalIncome[]
   familyTrust       FamilyTrust?
+  familyTrustBeneficiaries FamilyTrustBeneficiary[]
 }
 
 model CompanyShareholder {
@@ -380,6 +390,25 @@ model PersonalLiability {
   @@index([userId])
 }
 
+model PersonalExpense {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  label       String
+  category    String?
+  amount      Decimal   @default(0)
+  frequency   String    @default("MONTHLY")
+  startDate   DateTime?
+  endDate     DateTime?
+  essential   Boolean   @default(false)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+}
+
 model FamilyTrust {
   id             Int       @id @default(autoincrement())
   userId         Int
@@ -394,8 +423,46 @@ model FamilyTrust {
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+  fiduciaries FamilyTrustFiduciary[]
+  beneficiaries FamilyTrustBeneficiary[]
+  freezeScenarios FreezeScenario[]
 
   @@index([userId])
+}
+
+model FamilyTrustFiduciary {
+  id        Int       @id @default(autoincrement())
+  trustId   Int
+  fullName  String
+  role      String?
+  email     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  trust FamilyTrust @relation(fields: [trustId], references: [id], onDelete: Cascade)
+
+  @@index([trustId])
+}
+
+model FamilyTrustBeneficiary {
+  id         Int        @id @default(autoincrement())
+  trustId    Int
+  shareholderId Int?
+  displayName String
+  relationship String?
+  birthDate   DateTime?
+  preferredAllocationPercent Decimal?
+  lifetimeCapitalGainsExemptionClaimed Decimal?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  trust       FamilyTrust @relation(fields: [trustId], references: [id], onDelete: Cascade)
+  shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+  simulationResults FreezeSimulationBeneficiaryResult[]
+
+  @@index([trustId])
+  @@index([shareholderId])
 }
 
 model FamilyWealthSnapshot {
@@ -435,6 +502,245 @@ model FamilyWealthScenario {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, scenarioType])
+}
+
+model FreezeAsset {
+  id                        Int        @id @default(autoincrement())
+  userId                    Int
+  label                     String
+  assetType                 String     @default("PROPERTY")
+  fairMarketValue           Decimal    @default(0)
+  adjustedCostBase          Decimal    @default(0)
+  annualGrowthPercent       Decimal    @default(0)
+  distributionYieldPercent  Decimal    @default(0)
+  associatedDebt            Decimal?
+  companyId                 Int?
+  propertyId                Int?
+  notes                     String?
+  createdAt                 DateTime   @default(now())
+  updatedAt                 DateTime   @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  scenarios FreezeScenarioAsset[]
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([propertyId])
+}
+
+model FreezeScenario {
+  id                          Int       @id @default(autoincrement())
+  userId                      Int
+  trustId                     Int?
+  label                       String
+  baseYear                    Int
+  freezeRatePercent           Decimal   @default(0)
+  preferredDividendRatePercent Decimal  @default(0)
+  redemptionYears             Int       @default(20)
+  notes                       String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trust   FamilyTrust? @relation(fields: [trustId], references: [id], onDelete: SetNull)
+  assets  FreezeScenarioAsset[]
+  simulations FreezeSimulation[]
+
+  @@index([userId])
+  @@index([trustId])
+}
+
+model FreezeScenarioAsset {
+  id          Int              @id @default(autoincrement())
+  scenarioId  Int
+  assetId     Int
+  inclusionPercent Decimal     @default(100)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  scenario FreezeScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  asset    FreezeAsset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, assetId])
+  @@index([assetId])
+}
+
+model FreezeSimulation {
+  id                        Int       @id @default(autoincrement())
+  userId                    Int
+  scenarioId                Int
+  targetFreezeYear          Int
+  generations               Int
+  reinvestmentRatePercent   Decimal   @default(0)
+  marginalTaxRatePercent    Decimal   @default(0)
+  dividendRetentionPercent  Decimal   @default(0)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenario   FreezeScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  result     FreezeSimulationResult?
+  beneficiaryResults FreezeSimulationBeneficiaryResult[]
+  redemptions FreezeSimulationRedemption[]
+  dividends   FreezeSimulationDividend[]
+
+  @@index([userId])
+  @@index([scenarioId])
+}
+
+model FreezeSimulationResult {
+  id                       Int       @id @default(autoincrement())
+  simulationId             Int       @unique
+  preferredShareValue      Decimal   @default(0)
+  capitalGainTriggered     Decimal   @default(0)
+  capitalGainTax           Decimal   @default(0)
+  totalDividends           Decimal   @default(0)
+  totalAfterTaxRetained    Decimal   @default(0)
+  latentTaxBefore          Decimal   @default(0)
+  latentTaxAfter           Decimal   @default(0)
+  notes                    Json?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  simulation FreezeSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+}
+
+model FreezeSimulationBeneficiaryResult {
+  id               Int        @id @default(autoincrement())
+  simulationId     Int
+  beneficiaryId    Int?
+  beneficiaryName  String
+  cumulativeValue  Decimal    @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  simulation  FreezeSimulation      @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  beneficiary FamilyTrustBeneficiary? @relation(fields: [beneficiaryId], references: [id], onDelete: SetNull)
+
+  @@index([simulationId])
+  @@index([beneficiaryId])
+}
+
+model FreezeSimulationRedemption {
+  id           Int       @id @default(autoincrement())
+  simulationId Int
+  year         Int
+  outstanding  Decimal   @default(0)
+  redeemed     Decimal   @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  simulation FreezeSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
+  @@index([simulationId])
+}
+
+model FreezeSimulationDividend {
+  id                 Int       @id @default(autoincrement())
+  simulationId       Int
+  year               Int
+  amount             Decimal   @default(0)
+  taxableAmount      Decimal   @default(0)
+  afterTaxRetained   Decimal   @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  simulation FreezeSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
+  @@index([simulationId])
+}
+
+model InvestmentAccount {
+  id             Int                    @id @default(autoincrement())
+  userId         Int
+  label          String
+  accountType    String                 @default("TAXABLE")
+  institution    String?
+  accountNumber  String?
+  currency       String                 @default("CAD")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holdings      InvestmentHolding[]
+  transactions  InvestmentTransaction[]
+
+  @@index([userId, accountType])
+}
+
+model InvestmentHolding {
+  id               Int                  @id @default(autoincrement())
+  accountId        Int
+  symbol           String
+  description      String?
+  quantity         Decimal              @default(0)
+  bookValue        Decimal              @default(0)
+  marketValue      Decimal              @default(0)
+  currency         String               @default("CAD")
+  targetAllocation Decimal?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  account       InvestmentAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactions  InvestmentTransaction[]
+
+  @@index([accountId, symbol])
+}
+
+model InvestmentTransaction {
+  id              Int                 @id @default(autoincrement())
+  accountId       Int
+  holdingId       Int?
+  transactionType String
+  symbol          String
+  tradeDate       DateTime
+  quantity        Decimal
+  price           Decimal
+  fees            Decimal              @default(0)
+  notes           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  account InvestmentAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  holding InvestmentHolding?  @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, tradeDate])
+  @@index([holdingId])
+}
+
+model FinancialGoal {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  name          String
+  goalType      String    @default("GENERAL")
+  targetAmount  Decimal   @default(0)
+  targetDate    DateTime?
+  priority      Int       @default(3)
+  status        String    @default("ACTIVE")
+  description   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress  FinancialGoalProgress[]
+
+  @@index([userId, status])
+}
+
+model FinancialGoalProgress {
+  id           Int       @id @default(autoincrement())
+  goalId       Int
+  progressDate DateTime  @default(now())
+  amount       Decimal   @default(0)
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  goal FinancialGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, progressDate])
 }
 
 model PropertyUnit {

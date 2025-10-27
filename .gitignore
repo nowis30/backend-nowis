@@ -33,6 +33,3 @@ yarn-error.log*
 
 # Prisma artefacts clients
 prisma/generated/
-
-[Environment]::GetEnvironmentVariable('OPENAI_API_KEY','User')
-[Environment]::GetEnvironmentVariable('ADVISOR_ENGINE','User')

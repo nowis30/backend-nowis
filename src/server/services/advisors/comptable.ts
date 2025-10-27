@@ -40,7 +40,6 @@ export function runComptableAdvisor(context: AdvisorContext): AdvisorModuleOutpu
   }
 
   const coverage = computeWorkingCapitalCoverage(incomeValue!, marginKnown ? marginValue! : 0.2);
-  const healthyCoverage = coverage >= 6 ? 'Solide' : coverage >= 3 ? 'Intermédiaire' : 'À renforcer';
 
   const optimalRemuneration = Math.min(incomeValue! * 0.35, 120_000);
 
