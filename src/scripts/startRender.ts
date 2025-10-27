@@ -9,7 +9,8 @@ function getCommand(binary: string): string {
 function runCommand(command: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      stdio: 'inherit'
+      stdio: 'inherit',
+      shell: process.platform === 'win32'
     });
 
     child.on('error', (error) => {

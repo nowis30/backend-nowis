@@ -243,7 +243,19 @@ async function probe(url: string, token?: string): Promise<ProbeResult> {
 }
 
 async function run() {
+  const cliArgs = new Set(process.argv.slice(2));
+  const tokenOnly = cliArgs.has('--token-only');
+  const printToken = tokenOnly || cliArgs.has('--print-token');
+
   const { token } = await seedUser();
+
+  if (tokenOnly) {
+    if (printToken) {
+      emitToken(token);
+    }
+    return;
+  }
+
   const { process: server } = await startServer();
 
   const baseUrl = 'http://127.0.0.1:4000';
@@ -266,6 +278,10 @@ async function run() {
     }
   }
 
+  if (printToken) {
+    emitToken(token);
+  }
+
   server.kill('SIGTERM');
 }
 
@@ -277,3 +293,8 @@ run()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+function emitToken(token: string): void {
+  console.log('\nJWT temporaire (2h) pour smoke tests :');
+  console.log(token);
+}
