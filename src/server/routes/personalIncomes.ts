@@ -22,11 +22,17 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const ok =
-      /^application\/(pdf|x-pdf)$/i.test(file.mimetype) ||
-      /^image\/(png|jpe?g|webp|heic)$/i.test(file.mimetype);
+    const isPdfMime = /^application\/(pdf|x-pdf)$/i.test(file.mimetype);
+    const isImageMime = /^image\/(png|jpe?g|webp|heic)$/i.test(file.mimetype);
+    // Certains navigateurs envoient application/octet-stream pour les PDF
+    const isOctetPdf =
+      /octet-stream/i.test(file.mimetype) && /\.pdf$/i.test(file.originalname || '');
+
+    const ok = isPdfMime || isImageMime || isOctetPdf;
     if (!ok) {
-      return cb(new Error('Type de fichier non supporté (PDF ou image requis).'));
+      const err: any = new Error('Type de fichier non supporté (PDF ou image requis).');
+      err.status = 400;
+      return cb(err);
     }
     cb(null, true);
   }
