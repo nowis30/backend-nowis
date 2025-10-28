@@ -150,9 +150,16 @@ aiRouter.post('/reingest', async (req: AuthenticatedRequest, res: Response, next
       buffer = await fs.readFile(absPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' && (doc as any).content) {
-        // Fallback: utiliser le binaire stocké en base si le fichier local est manquant (environnements éphémères)
-        buffer = (doc as any).content as Buffer;
+      if (code === 'ENOENT') {
+        if ((doc as any).content) {
+          // Fallback: utiliser le binaire stocké en base si le fichier local est manquant (environnements éphémères)
+          buffer = (doc as any).content as Buffer;
+        } else {
+          return res.status(410).json({
+            error:
+              "Le fichier d'origine n'est plus disponible sur le disque et aucune copie en base n'est présente. Merci de ré-uploader le document, puis ré-essayer."
+          });
+        }
       } else {
         throw err;
       }
