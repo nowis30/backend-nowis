@@ -74,7 +74,10 @@ async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promis
     'ai:pdf: start render first page'
   );
   const pdfjsLib = await loadPdfJs();
-  const pdfDocument = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
+  // Crée une copie ArrayBuffer détachée pour éviter tout aliasing de mémoire avec Buffer
+  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  const pure = new Uint8Array(ab);
+  const pdfDocument = await pdfjsLib.getDocument({ data: pure, disableWorker: true }).promise;
   if (pdfDocument.numPages < 1) {
     throw new Error('PDF vide: aucune page à analyser.');
   }
