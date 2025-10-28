@@ -158,6 +158,33 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
   }
 
   const createdIds: number[] = [];
+  // Upsert du "PersonalTaxReturn" détaillé + lignes
+  // Crée/Met à jour un return conteneur, lie le document et stocke l'extraction brute
+  const taxReturn = await prisma.personalTaxReturn.upsert({
+    where: { shareholderId_taxYear: { shareholderId: shareholderId!, taxYear: targetYear! } },
+    update: { rawExtraction: extraction as any } as any,
+    create: { shareholderId: shareholderId!, taxYear: targetYear!, rawExtraction: extraction as any } as any
+  });
+  // Lier le document si non présent (ajout séparé pour compatibilité types tant que le client Prisma n'est pas régénéré)
+  if ((taxReturn as any).documentId == null) {
+    await prisma.personalTaxReturn.update({ where: { id: taxReturn.id }, data: { documentId: createdDoc.id } as any });
+  }
+  // Purge et réinsère les lignes INCOME à partir des items extraits
+  await (prisma as any).personalTaxReturnLine.deleteMany({ where: { returnId: taxReturn.id, section: 'INCOME' } });
+  let order = 0;
+  for (const it of items) {
+    await (prisma as any).personalTaxReturnLine.create({
+      data: {
+        returnId: taxReturn.id,
+        section: 'INCOME',
+        code: it.slipType ? String(it.slipType) : null,
+        label: it.label,
+        amount: it.amount,
+        orderIndex: order++,
+        metadata: it.source ? { source: it.source } : undefined
+      }
+    });
+  }
   if (req.options?.autoCreate) {
     for (const item of items) {
       if (!(item.label && item.amount > 0)) continue;
@@ -287,6 +314,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     extracted: items,
     createdIds,
     rentalStatements: createdRentalStatementIds,
-    documentId: createdDoc.id
+    documentId: createdDoc.id,
+    taxReturnId: taxReturn.id
   };
 }

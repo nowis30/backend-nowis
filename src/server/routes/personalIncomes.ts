@@ -245,6 +245,62 @@ personalIncomesRouter.get(
 
 export { personalIncomesRouter };
 
+// --- Détails du rapport d'impôt (toutes lignes/feuillets) ---
+const returnQuery = z.object({
+  shareholderId: z.coerce.number().int().positive(),
+  taxYear: z.coerce.number().int().min(2000).max(new Date().getFullYear() + 1)
+});
+
+personalIncomesRouter.get('/returns', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { shareholderId, taxYear } = returnQuery.parse(req.query);
+    const shareholder = await prisma.shareholder.findFirst({ where: { id: shareholderId, userId: req.userId } });
+    if (!shareholder) return res.status(404).json({ error: 'Actionnaire introuvable.' });
+
+    const ret = await prisma.personalTaxReturn.findFirst({ where: { shareholderId, taxYear } });
+    if (!ret) return res.json({ return: null, lines: [], slips: [] });
+
+    const [lines, slips] = await Promise.all([
+      (prisma as any).personalTaxReturnLine.findMany({ where: { returnId: ret.id }, orderBy: [{ section: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }] }),
+      (prisma as any).taxSlip.findMany({ where: { returnId: ret.id }, orderBy: [{ id: 'asc' }], include: { lines: true } })
+    ]);
+
+    res.json({
+      return: {
+        id: ret.id,
+        shareholderId: ret.shareholderId,
+        taxYear: ret.taxYear,
+        taxableIncome: Number(ret.taxableIncome ?? 0),
+        federalTax: Number(ret.federalTax ?? 0),
+        provincialTax: Number(ret.provincialTax ?? 0),
+        balanceDue: Number(ret.balanceDue ?? 0),
+        documentId: (ret as any).documentId ?? null,
+        rawExtraction: (ret as any).rawExtraction ?? null
+      },
+      lines: lines.map((l: any) => ({
+        id: l.id,
+        section: l.section,
+        code: l.code ?? null,
+        label: l.label,
+        amount: Number(l.amount ?? 0),
+        orderIndex: l.orderIndex ?? 0,
+        metadata: l.metadata ?? null
+      })),
+      slips: slips.map((s: any) => ({
+        id: s.id,
+        slipType: s.slipType,
+        issuer: s.issuer ?? null,
+        accountNumber: s.accountNumber ?? null,
+        documentId: s.documentId ?? null,
+        metadata: s.metadata ?? null,
+        lines: (s.lines ?? []).map((li: any) => ({ id: li.id, code: li.code ?? null, label: li.label, amount: Number(li.amount ?? 0), orderIndex: li.orderIndex ?? 0, metadata: li.metadata ?? null }))
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 personalIncomesRouter.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { shareholderId, taxYear } = listQuerySchema.parse(req.query);

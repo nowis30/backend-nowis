@@ -341,12 +341,78 @@ model PersonalTaxReturn {
   provincialTax            Decimal   @default(0)
   totalCredits             Decimal   @default(0)
   balanceDue               Decimal   @default(0)
+  // Lien optionnel avec le document importé (PDF) et capture de l'extraction brute
+  documentId               Int?
+  rawExtraction            Json?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  document    UploadedDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  lines       PersonalTaxReturnLine[]
+  slips       TaxSlip[]
 
   @@unique([shareholderId, taxYear])
+}
+
+enum TaxSection {
+  INCOME
+  DEDUCTION
+  CREDIT
+  CARRYFORWARD
+  PAYMENT
+  OTHER
+}
+
+model PersonalTaxReturnLine {
+  id         Int        @id @default(autoincrement())
+  returnId   Int
+  section    TaxSection
+  code       String?
+  label      String
+  amount     Decimal    @default(0)
+  orderIndex Int        @default(0)
+  metadata   Json?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  taxReturn PersonalTaxReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId, section])
+}
+
+model TaxSlip {
+  id            Int       @id @default(autoincrement())
+  returnId      Int
+  slipType      String    // ex: T4, T5, T3, T4A, T5008, RL-1, etc.
+  issuer        String?
+  accountNumber String?
+  documentId    Int?
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  taxReturn PersonalTaxReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  document  UploadedDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  lines     TaxSlipLine[]
+
+  @@index([returnId])
+}
+
+model TaxSlipLine {
+  id        Int      @id @default(autoincrement())
+  slipId    Int
+  code      String?
+  label     String
+  amount    Decimal  @default(0)
+  orderIndex Int     @default(0)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slip TaxSlip @relation(fields: [slipId], references: [id], onDelete: Cascade)
+
+  @@index([slipId])
 }
 
 model PersonalIncome {
