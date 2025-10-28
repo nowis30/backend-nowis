@@ -29,6 +29,7 @@ import { metricsRouter } from './metrics';
 import { leverageRouter } from './leverage';
 import { aiRouter } from './ai';
 import { monitoringRouter } from './monitoring';
+import { documentsRouter } from './documents';
 
 const routes = Router();
 
@@ -61,5 +62,6 @@ routes.use('/metrics', metricsRouter);
 routes.use('/leverage', leverageRouter);
 routes.use('/ai', aiRouter);
 routes.use('/monitoring', monitoringRouter);
+routes.use('/documents', documentsRouter);
 
 export { routes };

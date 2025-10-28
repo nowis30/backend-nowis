@@ -96,6 +96,10 @@ model Shareholder {
   userId        Int
   type          String               @default("PERSON")
   displayName   String
+  // Champs démographiques de base pour le profil personnel
+  address       String?
+  birthDate     DateTime?
+  gender        String?
   contactEmail  String?
   contactPhone  String?
   notes         String?
@@ -1124,4 +1128,29 @@ model Notification {
   event AlertEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId, status])
+}
+
+// Documents téléversés par l'utilisateur (généraux, ex: rapports d'impôt importés)
+model UploadedDocument {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  domain       String    // ex: 'personal-income', 'property', 'company'
+  label        String
+  notes        String?
+  originalName String
+  contentType  String
+  size         Int
+  storagePath  String
+  checksum     String?
+  taxYear      Int?
+  shareholderId Int?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+
+  @@index([userId, domain])
+  @@index([userId, taxYear])
 }

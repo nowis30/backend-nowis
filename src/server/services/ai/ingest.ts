@@ -2,6 +2,7 @@
 import { prisma } from '../../lib/prisma';
 import { env } from '../../env';
 import { extractPersonalTaxReturn, extractRentalTaxSummaries } from '../../services/tax';
+import { saveUserDocumentFile } from '../../services/documentStorage';
 import type { RentalTaxFormType } from '@prisma/client';
 
 type IngestDomain = 'personal-income' | 'property' | 'company';
@@ -90,6 +91,23 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
       { status: 501 }
     );
   }
+
+  // Sauvegarde du document importé
+  const saved = await saveUserDocumentFile({ buffer: req.file.buffer, userId: req.userId, originalName: req.file.filename || 'document.pdf' });
+  const createdDoc = await (prisma as any).uploadedDocument.create({
+    data: {
+      userId: req.userId,
+      domain: 'personal-income',
+      label: req.file.filename || 'Rapport impôt',
+      originalName: req.file.filename || 'document.pdf',
+      contentType: req.file.contentType,
+      size: req.file.buffer.byteLength,
+      storagePath: saved.storagePath,
+      checksum: saved.checksum,
+      taxYear: req.options?.taxYear ?? null,
+      shareholderId: req.options?.shareholderId ?? null
+    }
+  });
 
   // Étape 1: extraction (mini)
   const extraction = await extractPersonalTaxReturn({
@@ -255,6 +273,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     taxYear: targetYear,
     extracted: items,
     createdIds,
-    rentalStatements: createdRentalStatementIds
+    rentalStatements: createdRentalStatementIds,
+    documentId: createdDoc.id
   };
 }

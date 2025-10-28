@@ -107,6 +107,107 @@ async function ensureShareholderOwnership(userId: number, shareholderId: number)
 
 personalIncomesRouter.use(authenticated);
 
+// --- Profil personnel (informations démographiques basiques) ---
+const profileUpdateSchema = z.object({
+  displayName: z
+    .preprocess((v) => (typeof v === 'string' ? v.trim() : v), z.string().min(1).max(255))
+    .optional(),
+  address: optionalTrimmedString,
+  birthDate: z
+    .union([z.string(), z.date()])
+    .transform((value) => (value instanceof Date ? value : new Date(value)))
+    .refine((value) => !Number.isNaN(value?.getTime()), { message: 'Date de naissance invalide.' })
+    .optional(),
+  gender: z
+    .preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), z.enum(['MALE', 'FEMALE', 'OTHER']))
+    .optional()
+});
+
+personalIncomesRouter.get(
+  '/profile',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      // Récupère (ou provisionne) le profil actionnaire principal de l'utilisateur
+      let shareholder = await prisma.shareholder.findFirst({
+        where: { userId: req.userId },
+        orderBy: [{ id: 'asc' }]
+      });
+
+      if (!shareholder) {
+        const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { email: true } });
+        shareholder = await prisma.shareholder.create({
+          data: { userId: req.userId!, displayName: 'Profil personnel', contactEmail: user?.email ?? null }
+        });
+      }
+
+      const latestReturn = await prisma.personalTaxReturn.findFirst({
+        where: { shareholderId: shareholder.id },
+        orderBy: [{ taxYear: 'desc' }]
+      });
+
+      const shAny = shareholder as any;
+      res.json({
+        id: shareholder.id,
+        displayName: shareholder.displayName,
+        address: (shAny.address as string | null | undefined) ?? null,
+        birthDate: shAny.birthDate ? new Date(shAny.birthDate).toISOString() : null,
+        gender: (shAny.gender as string | null | undefined) ?? null,
+        contactEmail: shareholder.contactEmail ?? null,
+        contactPhone: shareholder.contactPhone ?? null,
+        latestTaxableIncome: latestReturn ? Number(latestReturn.taxableIncome) : null,
+        latestTaxYear: latestReturn ? latestReturn.taxYear : null
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+personalIncomesRouter.put(
+  '/profile',
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const payload = profileUpdateSchema.parse(req.body);
+
+      let shareholder = await prisma.shareholder.findFirst({
+        where: { userId: req.userId },
+        orderBy: [{ id: 'asc' }]
+      });
+
+      if (!shareholder) {
+        const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { email: true } });
+        shareholder = await prisma.shareholder.create({
+          data: { userId: req.userId!, displayName: 'Profil personnel', contactEmail: user?.email ?? null }
+        });
+      }
+
+      const updated = await prisma.shareholder.update({
+        where: { id: shareholder.id },
+        data: {
+          displayName: payload.displayName ?? shareholder.displayName,
+          // Champs ajoutés: on cast en any tant que le client Prisma n'est pas régénéré
+          ...(payload.address !== undefined ? { address: payload.address } : {}),
+          ...(payload.birthDate !== undefined ? { birthDate: payload.birthDate as Date | null } : {}),
+          ...(payload.gender !== undefined ? { gender: payload.gender } : {})
+        } as any
+      });
+
+      const upAny = updated as any;
+      res.json({
+        id: updated.id,
+        displayName: updated.displayName,
+        address: (upAny.address as string | null | undefined) ?? null,
+        birthDate: upAny.birthDate ? new Date(upAny.birthDate).toISOString() : null,
+        gender: (upAny.gender as string | null | undefined) ?? null,
+        contactEmail: updated.contactEmail ?? null,
+        contactPhone: updated.contactPhone ?? null
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 personalIncomesRouter.get(
   '/shareholders',
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
