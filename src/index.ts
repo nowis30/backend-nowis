@@ -5,6 +5,7 @@ import { env } from './server/env';
 import { startWealthSnapshotJob } from './server/jobs/wealthSnapshotJob';
 import { logger } from './server/lib/logger';
 import { runMigrations } from './server/lib/runMigrations';
+import { startMonitoringJobs } from './server/jobs/monitoringJobs';
 
 // Render (et la plupart des PaaS) fournissent une variable d'env PORT et
 // exigent que l'application écoute sur 0.0.0.0 à ce port.
@@ -29,6 +30,9 @@ async function main() {
         runOnStart: true
       });
     }
+
+    // Optional monitoring jobs (health checks)
+    startMonitoringJobs();
   });
 }
 

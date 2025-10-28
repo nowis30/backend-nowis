@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { routes } from './routes/index';
 import { logger } from './lib/logger';
 import { errorHandler } from './middlewares/errorHandler';
+import { telemetry } from './middlewares/telemetry';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(pinoHttp({ logger }));
+app.use(telemetry);
 
 app.use('/api', apiLimiter, routes);
 

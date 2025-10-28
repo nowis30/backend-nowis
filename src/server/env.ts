@@ -29,7 +29,19 @@ const envSchema = z.object({
       return undefined;
     }, z.boolean())
     .default(false),
-  WEALTH_SNAPSHOT_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(720)
+  WEALTH_SNAPSHOT_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(720),
+  ENABLE_MONITORING_JOBS: z
+    .preprocess((value) => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        const n = value.trim().toLowerCase();
+        return ['1', 'true', 'yes', 'on'].includes(n);
+      }
+      return undefined;
+    }, z.boolean())
+    .default(false),
+  MONITOR_HEALTH_INTERVAL_SECONDS: z.coerce.number().int().min(15).default(60),
+  MONITOR_USER_EMAIL: z.string().email().optional()
 });
 
 export const env = envSchema.parse(process.env);
