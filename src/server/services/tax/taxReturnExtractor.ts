@@ -368,22 +368,44 @@ export async function extractPersonalTaxReturn(params: {
     // Conserver rawText du premier batch contenant du texte
     if (!aggregated.rawText && parsed.rawText) aggregated.rawText = parsed.rawText;
   }
-  // Déduplication simple des items et feuillets entre lots
+  // Déduplication renforcée des items et feuillets entre lots
+  const norm = (v: any) => String(v ?? '').trim().toLowerCase();
+  // Items: clé = category|label(norm)|source(norm)|slipType(norm)|amount(2d)
   if (aggregated.items?.length) {
     const seen = new Set<string>();
-    aggregated.items = aggregated.items.filter((i: any) => {
-      const key = `${(i.section||'').toLowerCase()}|${(i.label||'').toLowerCase()}|${i.amount ?? ''}`;
+    aggregated.items = aggregated.items.filter((i: ExtractedPersonalIncomeItem) => {
+      const amt = Number.isFinite(i.amount) ? (Math.round(i.amount * 100) / 100).toFixed(2) : '0.00';
+      const key = `${norm(i.category)}|${norm(i.label)}|${norm(i.source)}|${norm(i.slipType)}|${amt}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   }
+  // Dédupliquer les lignes à l'intérieur de chaque feuillet
   if (aggregated.slips?.length) {
-    const seen = new Set<string>();
-    aggregated.slips = aggregated.slips.filter((s: any) => {
-      const key = `${(s.slipType||'').toLowerCase()}|${(s.issuer||'').toLowerCase()}|${s.taxYear || aggregated.taxYear || ''}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+    aggregated.slips = (aggregated.slips || []).map((s) => {
+      if (!s?.lines?.length) return s;
+      const seenLines = new Set<string>();
+      const lines = s.lines.filter((li) => {
+        const amt = Number.isFinite(li.amount) ? (Math.round(li.amount * 100) / 100).toFixed(2) : '0.00';
+        const lineKey = `${norm(li.code)}|${norm(li.label)}|${amt}`;
+        if (seenLines.has(lineKey)) return false;
+        seenLines.add(lineKey);
+        return true;
+      });
+      return { ...s, lines };
+    });
+    // Dédupliquer les feuillets entre eux avec une clé robuste incluant les lignes (codes/labels triés)
+    const seenSlips = new Set<string>();
+    aggregated.slips = aggregated.slips.filter((s) => {
+      const baseKey = `${norm(s.slipType)}|${norm(s.issuer)}|${norm(s.accountNumber)}|${s ? (aggregated.taxYear ?? '') : ''}`;
+      const lineSig = (s.lines || [])
+        .map((li) => `${norm(li.code)}:${norm(li.label)}:${Number.isFinite(li.amount) ? (Math.round(li.amount * 100) / 100).toFixed(2) : '0.00'}`)
+        .sort()
+        .join(';');
+      const key = `${baseKey}|${lineSig}`;
+      if (seenSlips.has(key)) return false;
+      seenSlips.add(key);
       return true;
     });
   }
