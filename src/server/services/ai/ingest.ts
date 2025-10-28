@@ -185,6 +185,35 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
       }
     });
   }
+  // Purge et réinsère les FEUILLETS détaillés si présents
+  await (prisma as any).taxSlip.deleteMany({ where: { returnId: taxReturn.id } });
+  const slips = Array.isArray((extraction as any).slips) ? ((extraction as any).slips as any[]) : [];
+  for (const s of slips) {
+    const createdSlip = await (prisma as any).taxSlip.create({
+      data: {
+        returnId: taxReturn.id,
+        slipType: String(s?.slipType || 'UNKNOWN'),
+        issuer: s?.issuer ? String(s.issuer) : null,
+        accountNumber: s?.accountNumber ? String(s.accountNumber) : null,
+        documentId: createdDoc.id,
+        metadata: s?.metadata && typeof s.metadata === 'object' ? s.metadata : undefined
+      }
+    });
+    let liOrder = 0;
+    const lines = Array.isArray(s?.lines) ? (s.lines as any[]) : [];
+    for (const li of lines) {
+      await (prisma as any).taxSlipLine.create({
+        data: {
+          slipId: createdSlip.id,
+          code: typeof li?.code === 'string' ? li.code : null,
+          label: String(li?.label || '').trim() || 'Ligne',
+          amount: parseAmount(li?.amount),
+          orderIndex: liOrder++,
+          metadata: li?.metadata && typeof li.metadata === 'object' ? li.metadata : undefined
+        }
+      });
+    }
+  }
   if (req.options?.autoCreate) {
     for (const item of items) {
       if (!(item.label && item.amount > 0)) continue;

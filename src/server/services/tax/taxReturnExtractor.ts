@@ -112,9 +112,23 @@ export type ExtractedPersonalIncomeItem = {
   slipType?: string;
 };
 
+export type ExtractedSlipLine = {
+  code?: string;
+  label: string;
+  amount: number;
+};
+
+export type ExtractedTaxSlip = {
+  slipType: string; // ex: T4, T5, RL-1, T3, T5008, T4A
+  issuer?: string;
+  accountNumber?: string;
+  lines: ExtractedSlipLine[];
+};
+
 export interface ExtractedPersonalTaxReturn {
   taxYear?: number;
   items: ExtractedPersonalIncomeItem[];
+  slips?: ExtractedTaxSlip[];
   confidence: number; // 0..1 overall
   rawText?: string;
 }
@@ -122,11 +136,11 @@ export interface ExtractedPersonalTaxReturn {
 function buildPrompt(): string {
   return [
     'Tu es un extracteur de déclarations de revenus personnelles canadiennes (T1/TP1, feuillets T4, T5, relevés).',
-    'Objectif: produire une liste normalisée de revenus personnels pour alimenter un logiciel.',
+    "Objectif: produire une liste normalisée de revenus personnels ET, lorsque possible, les FEUILLETS (slips) avec leurs lignes (numéros de case/code et montants).",
     'Retourne STRICTEMENT un JSON valide conforme au schéma ci-dessous.',
     'Règles:',
     '- taxYear: année d’imposition détectée (nombre) si visible, sinon omets le champ.',
-    '- items: tableau de revenus. Chaque item:',
+    '- items: tableau de revenus (agrégé). Chaque item:',
     "  - category: une des valeurs EMPLOYMENT, PENSION, OAS, CPP_QPP, RRIF_RRSP, BUSINESS, ELIGIBLE_DIVIDEND, NON_ELIGIBLE_DIVIDEND, CAPITAL_GAIN, OTHER",
     '  - label: libellé court (ex: Salaire – Employeur ABC, Dividendes admissibles – Banque X, REER – retrait)',
     '  - amount: montant annuel CAD (nombre). Utilise le total net taxable le plus approprié.',
@@ -134,8 +148,17 @@ function buildPrompt(): string {
     '  - slipType: code du feuillet si connu (ex: T4, T5, RL-1, Relevé 3).',
     '- Si plusieurs feuillets du même type existent, crée un item par feuillet ou agrège si clair, mais ne duplique pas.',
     '',
+    '- slips: tableau détaillé des feuillets détectés, si possible. Chaque slip:',
+    '  - slipType: ex: T4, T5, RL-1, T3, T5008, T4A',
+    '  - issuer: nom de l’émetteur si visible',
+    '  - accountNumber: numéro de compte si visible',
+    '  - lines: tableau des lignes du feuillet (utilise le numéro/case quand présent):',
+    '    - code: code/numéro de ligne/case (ex: 14 pour T4 case 14, ou RL-1 A, etc.)',
+    '    - label: libellé court de la ligne',
+    '    - amount: montant numérique',
+    '',
     'Schéma JSON exact (ne retourne rien d’autre):',
-    '{\n  "taxYear"?: number,\n  "items": {\n    "category": string,\n    "label": string,\n    "amount": number,\n    "source"?: string,\n    "slipType"?: string\n  }[],\n  "confidence": number,\n  "rawText"?: string\n}'
+    '{\n  "taxYear"?: number,\n  "items": {\n    "category": string,\n    "label": string,\n    "amount": number,\n    "source"?: string,\n    "slipType"?: string\n  }[],\n  "slips"?: {\n    "slipType": string,\n    "issuer"?: string,\n    "accountNumber"?: string,\n    "lines": {\n      "code"?: string,\n      "label": string,\n      "amount": number\n    }[]\n  }[],\n  "confidence": number,\n  "rawText"?: string\n}'
   ].join('\n');
 }
 
@@ -151,10 +174,28 @@ function coerceExtraction(data: any): ExtractedPersonalTaxReturn {
           slipType: typeof x.slipType === 'string' ? x.slipType : undefined
         }))
     : [];
+  const slips: ExtractedTaxSlip[] = Array.isArray(data?.slips)
+    ? data.slips
+        .filter((s: any) => s && typeof s.slipType === 'string')
+        .map((s: any) => ({
+          slipType: String(s.slipType).trim(),
+          issuer: typeof s.issuer === 'string' ? s.issuer : undefined,
+          accountNumber: typeof s.accountNumber === 'string' ? s.accountNumber : undefined,
+          lines: Array.isArray(s.lines)
+            ? s.lines
+                .filter((li: any) => li && typeof li.label === 'string' && typeof li.amount !== 'undefined')
+                .map((li: any) => ({
+                  code: typeof li.code === 'string' ? li.code : undefined,
+                  label: String(li.label).trim(),
+                  amount: Number(li.amount ?? 0)
+                }))
+            : []
+        }))
+    : [];
   const taxYear = typeof data?.taxYear === 'number' ? data.taxYear : undefined;
   const confidence = Math.max(0, Math.min(1, Number(data?.confidence ?? 0)));
   const rawText = typeof data?.rawText === 'string' ? data.rawText : undefined;
-  return { taxYear, items, confidence, rawText };
+  return { taxYear, items, slips, confidence, rawText };
 }
 
 export async function extractPersonalTaxReturn(params: {

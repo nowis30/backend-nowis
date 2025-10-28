@@ -301,6 +301,221 @@ personalIncomesRouter.get('/returns', async (req: AuthenticatedRequest, res: Res
   }
 });
 
+// --- CRUD basique pour les lignes de retour et feuillets ---
+const sectionEnum = z.enum(['INCOME', 'DEDUCTION', 'CREDIT', 'CARRYFORWARD', 'PAYMENT', 'OTHER']);
+const lineCreateSchema = z.object({
+  section: sectionEnum,
+  code: optionalTrimmedString,
+  label: z.string().trim().min(1),
+  amount: z.coerce.number(),
+  orderIndex: z.coerce.number().int().optional(),
+  metadata: z.any().optional()
+});
+const lineUpdateSchema = z.object({
+  section: sectionEnum.optional(),
+  code: optionalTrimmedString,
+  label: z.string().trim().min(1).optional(),
+  amount: z.coerce.number().optional(),
+  orderIndex: z.coerce.number().int().optional(),
+  metadata: z.any().optional()
+});
+const idParam = z.object({ id: z.coerce.number().int().positive() });
+
+personalIncomesRouter.post('/returns/:id/lines', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParam.parse(req.params);
+    const payload = lineCreateSchema.parse(req.body);
+    const ret = await prisma.personalTaxReturn.findFirst({ where: { id, shareholder: { userId: req.userId } } });
+    if (!ret) return res.status(404).json({ error: 'Retour fiscal introuvable.' });
+    const created = await (prisma as any).personalTaxReturnLine.create({
+      data: {
+        returnId: ret.id,
+        section: payload.section,
+        code: payload.code ?? null,
+        label: payload.label,
+        amount: payload.amount,
+        orderIndex: payload.orderIndex ?? 0,
+        metadata: payload.metadata ?? undefined
+      }
+    });
+    res.status(201).json({ id: created.id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+personalIncomesRouter.put('/returns/:id/lines/:lineId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id, lineId } = { ...idParam.parse(req.params), lineId: z.coerce.number().int().positive().parse(req.params.lineId) } as any;
+    const payload = lineUpdateSchema.parse(req.body);
+    const line = await (prisma as any).personalTaxReturnLine.findFirst({
+      where: { id: lineId, taxReturn: { id, shareholder: { userId: req.userId } } }
+    });
+    if (!line) return res.status(404).json({ error: 'Ligne introuvable.' });
+    await (prisma as any).personalTaxReturnLine.update({
+      where: { id: lineId },
+      data: {
+        ...(payload.section ? { section: payload.section } : {}),
+        ...(payload.code !== undefined ? { code: payload.code ?? null } : {}),
+        ...(payload.label !== undefined ? { label: payload.label } : {}),
+        ...(payload.amount !== undefined ? { amount: payload.amount } : {}),
+        ...(payload.orderIndex !== undefined ? { orderIndex: payload.orderIndex } : {}),
+        ...(payload.metadata !== undefined ? { metadata: payload.metadata } : {})
+      }
+    });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+personalIncomesRouter.delete('/returns/:id/lines/:lineId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id, lineId } = { ...idParam.parse(req.params), lineId: z.coerce.number().int().positive().parse(req.params.lineId) } as any;
+    const line = await (prisma as any).personalTaxReturnLine.findFirst({
+      where: { id: lineId, taxReturn: { id, shareholder: { userId: req.userId } } }
+    });
+    if (!line) return res.status(404).json({ error: 'Ligne introuvable.' });
+    await (prisma as any).personalTaxReturnLine.delete({ where: { id: lineId } });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Feuillets
+const slipCreateSchema = z.object({
+  slipType: z.string().trim().min(1),
+  issuer: optionalTrimmedString,
+  accountNumber: optionalTrimmedString,
+  orderIndex: z.coerce.number().int().optional(),
+  metadata: z.any().optional()
+});
+const slipUpdateSchema = slipCreateSchema.partial();
+const slipIdParam = z.object({ slipId: z.coerce.number().int().positive() });
+
+personalIncomesRouter.post('/returns/:id/slips', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParam.parse(req.params);
+    const payload = slipCreateSchema.parse(req.body);
+    const ret = await prisma.personalTaxReturn.findFirst({ where: { id, shareholder: { userId: req.userId } } });
+    if (!ret) return res.status(404).json({ error: 'Retour fiscal introuvable.' });
+    const created = await (prisma as any).taxSlip.create({
+      data: {
+        returnId: ret.id,
+        slipType: payload.slipType,
+        issuer: payload.issuer ?? null,
+        accountNumber: payload.accountNumber ?? null,
+        metadata: payload.metadata ?? undefined
+      }
+    });
+    res.status(201).json({ id: created.id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+personalIncomesRouter.put('/slips/:slipId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { slipId } = slipIdParam.parse(req.params);
+    const payload = slipUpdateSchema.parse(req.body);
+    const slip = await (prisma as any).taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
+    if (!slip) return res.status(404).json({ error: 'Feuillet introuvable.' });
+    await (prisma as any).taxSlip.update({
+      where: { id: slipId },
+      data: {
+        ...(payload.slipType !== undefined ? { slipType: payload.slipType } : {}),
+        ...(payload.issuer !== undefined ? { issuer: payload.issuer ?? null } : {}),
+        ...(payload.accountNumber !== undefined ? { accountNumber: payload.accountNumber ?? null } : {}),
+        ...(payload.metadata !== undefined ? { metadata: payload.metadata } : {})
+      }
+    });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+personalIncomesRouter.delete('/slips/:slipId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { slipId } = slipIdParam.parse(req.params);
+    const slip = await (prisma as any).taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
+    if (!slip) return res.status(404).json({ error: 'Feuillet introuvable.' });
+    await (prisma as any).taxSlip.delete({ where: { id: slipId } });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Lignes de feuillet
+const slipLineCreateSchema = z.object({
+  code: optionalTrimmedString,
+  label: z.string().trim().min(1),
+  amount: z.coerce.number(),
+  orderIndex: z.coerce.number().int().optional(),
+  metadata: z.any().optional()
+});
+const slipLineUpdateSchema = slipLineCreateSchema.partial();
+
+personalIncomesRouter.post('/slips/:slipId/lines', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { slipId } = slipIdParam.parse(req.params);
+    const payload = slipLineCreateSchema.parse(req.body);
+    const slip = await (prisma as any).taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
+    if (!slip) return res.status(404).json({ error: 'Feuillet introuvable.' });
+    const created = await (prisma as any).taxSlipLine.create({
+      data: {
+        slipId,
+        code: payload.code ?? null,
+        label: payload.label,
+        amount: payload.amount,
+        orderIndex: payload.orderIndex ?? 0,
+        metadata: payload.metadata ?? undefined
+      }
+    });
+    res.status(201).json({ id: created.id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+personalIncomesRouter.put('/slips/:slipId/lines/:lineId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { slipId } = slipIdParam.parse(req.params);
+    const lineId = z.coerce.number().int().positive().parse(req.params.lineId);
+    const payload = slipLineUpdateSchema.parse(req.body);
+    const line = await (prisma as any).taxSlipLine.findFirst({ where: { id: lineId, slip: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } } });
+    if (!line) return res.status(404).json({ error: 'Ligne de feuillet introuvable.' });
+    await (prisma as any).taxSlipLine.update({
+      where: { id: lineId },
+      data: {
+        ...(payload.code !== undefined ? { code: payload.code ?? null } : {}),
+        ...(payload.label !== undefined ? { label: payload.label } : {}),
+        ...(payload.amount !== undefined ? { amount: payload.amount } : {}),
+        ...(payload.orderIndex !== undefined ? { orderIndex: payload.orderIndex } : {}),
+        ...(payload.metadata !== undefined ? { metadata: payload.metadata } : {})
+      }
+    });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+personalIncomesRouter.delete('/slips/:slipId/lines/:lineId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { slipId } = slipIdParam.parse(req.params);
+    const lineId = z.coerce.number().int().positive().parse(req.params.lineId);
+    const line = await (prisma as any).taxSlipLine.findFirst({ where: { id: lineId, slip: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } } });
+    if (!line) return res.status(404).json({ error: 'Ligne de feuillet introuvable.' });
+    await (prisma as any).taxSlipLine.delete({ where: { id: lineId } });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
 personalIncomesRouter.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { shareholderId, taxYear } = listQuerySchema.parse(req.query);
