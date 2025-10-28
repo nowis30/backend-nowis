@@ -49,8 +49,10 @@ async function loadPdfJs(): Promise<PdfJsModule> {
 
 async function renderPdfFirstPageToDataUrl(filePath: string): Promise<string> {
   const buffer = await fs.promises.readFile(filePath);
+  // pdfjs attend un Uint8Array pur, pas un Buffer Node
+  const typed = Buffer.isBuffer(buffer) ? new Uint8Array(buffer) : (buffer as unknown as Uint8Array);
   const pdfjsLib = await loadPdfJs();
-  const pdfDocument = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
+  const pdfDocument = await pdfjsLib.getDocument({ data: typed, disableWorker: true }).promise;
   if (pdfDocument.numPages < 1) {
     throw new Error('PDF vide: aucune page à analyser.');
   }

@@ -145,8 +145,21 @@ export async function extractPersonalTaxReturn(params: {
   }
 
   const { contentType } = params;
-  // Normalise en Uint8Array pour les lib tierces qui refusent Buffer
-  const binary = params.buffer instanceof Uint8Array ? params.buffer : new Uint8Array(params.buffer);
+  // Normalise en Uint8Array (attention: Buffer hérite de Uint8Array donc il faut le détecter explicitement)
+  let binary: Uint8Array;
+  // @ts-ignore Buffer global peut ne pas exister selon l'environnement
+  const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(params.buffer as any);
+  if (isBuffer) {
+    // Copie vers un Uint8Array pur
+    // @ts-ignore Buffer typings
+    binary = new Uint8Array(params.buffer as any);
+  } else if (params.buffer instanceof Uint8Array) {
+    binary = params.buffer as Uint8Array;
+  } else {
+    // Dernier recours
+    // @ts-ignore any to Uint8Array
+    binary = new Uint8Array(params.buffer as any);
+  }
   let dataUrl: string;
   if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
   dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
