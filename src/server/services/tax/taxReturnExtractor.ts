@@ -108,7 +108,20 @@ async function renderPdfPagesToDataUrlsFromBuffer(
   buffer: Uint8Array,
   opts?: { maxPages?: number; scale?: number }
 ): Promise<string[]> {
-  const maxPages = Math.max(1, Math.min(20, opts?.maxPages ?? Number(process.env.AI_PDF_MAX_PAGES || 5)));
+  // maxPages: nombre de pages à rendre; si <=0 ou si AI_PDF_MAX_PAGES = ALL/*, on lit TOUTES les pages.
+  const envMax = process.env.AI_PDF_MAX_PAGES;
+  let maxPages: number | null = null;
+  if (typeof opts?.maxPages === 'number' && Number.isFinite(opts.maxPages)) {
+    maxPages = opts.maxPages;
+  } else if (typeof envMax === 'string' && envMax.trim() !== '') {
+    if (/^(all|\*)$/i.test(envMax.trim())) {
+      maxPages = 0; // 0 => toutes
+    } else {
+      const n = parseInt(envMax.trim(), 10);
+      maxPages = Number.isFinite(n) ? n : null;
+    }
+  }
+  if (maxPages == null) maxPages = 5; // défaut
   const scale = opts?.scale ?? 1.8;
 
   const pdfjsLib = await loadPdfJs();
@@ -119,7 +132,7 @@ async function renderPdfPagesToDataUrlsFromBuffer(
   const pdfDocument = await pdfjsLib
     .getDocument({ data: pure, disableWorker: true, standardFontDataUrl })
     .promise;
-  const pageCount = Math.min(pdfDocument.numPages, maxPages);
+  const pageCount = maxPages <= 0 ? pdfDocument.numPages : Math.min(pdfDocument.numPages, Math.max(1, maxPages));
   const canvasFactory = new NodeCanvasFactory();
   const images: string[] = [];
   try {
