@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from 'node:fs';
+import path from 'node:path';
 
 import { createCanvas, type Canvas, type SKRSContext2D } from '@napi-rs/canvas';
 
@@ -52,8 +53,15 @@ async function renderPdfFirstPageToDataUrl(filePath: string): Promise<string> {
   // pdfjs attend un Uint8Array pur, pas un Buffer Node
   const typed = Buffer.isBuffer(buffer) ? new Uint8Array(buffer) : (buffer as unknown as Uint8Array);
   const pdfjsLib = await loadPdfJs();
-  const version = (pdfjsLib as any)?.version || 'latest';
-  const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  let standardFontDataUrl: string;
+  try {
+    const pkgPath = require.resolve('pdfjs-dist/package.json');
+    const dir = path.join(path.dirname(pkgPath), 'standard_fonts') + '/';
+    standardFontDataUrl = dir.replace(/\\/g, '/');
+  } catch {
+    const version = (pdfjsLib as any)?.version || 'latest';
+    standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  }
   const pdfDocument = await pdfjsLib.getDocument({ data: typed, disableWorker: true, standardFontDataUrl }).promise;
   if (pdfDocument.numPages < 1) {
     throw new Error('PDF vide: aucune page à analyser.');

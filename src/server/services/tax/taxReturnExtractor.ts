@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import path from 'node:path';
 import { createCanvas, type Canvas, type SKRSContext2D } from '@napi-rs/canvas';
 
 import { env } from '../../env';
@@ -78,8 +79,17 @@ async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promis
   const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
   const pure = new Uint8Array(ab);
   // Fournit l'URL des polices standard pour éviter les warnings en prod
-  const version = (pdfjsLib as any)?.version || 'latest';
-  const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  // Préfère les polices locales (node_modules) pour éviter les échecs réseau en prod
+  let standardFontDataUrl: string;
+  try {
+    // Résout le dossier standard_fonts dans pdfjs-dist
+    const pkgPath = require.resolve('pdfjs-dist/package.json');
+    const dir = path.join(path.dirname(pkgPath), 'standard_fonts') + '/';
+    standardFontDataUrl = dir.replace(/\\/g, '/');
+  } catch {
+    const version = (pdfjsLib as any)?.version || 'latest';
+    standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  }
   const pdfDocument = await pdfjsLib
     .getDocument({ data: pure, disableWorker: true, standardFontDataUrl })
     .promise;
@@ -127,8 +137,15 @@ async function renderPdfPagesToDataUrlsFromBuffer(
   const pdfjsLib = await loadPdfJs();
   const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
   const pure = new Uint8Array(ab);
-  const version = (pdfjsLib as any)?.version || 'latest';
-  const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  let standardFontDataUrl: string;
+  try {
+    const pkgPath = require.resolve('pdfjs-dist/package.json');
+    const dir = path.join(path.dirname(pkgPath), 'standard_fonts') + '/';
+    standardFontDataUrl = dir.replace(/\\/g, '/');
+  } catch {
+    const version = (pdfjsLib as any)?.version || 'latest';
+    standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  }
   const pdfDocument = await pdfjsLib
     .getDocument({ data: pure, disableWorker: true, standardFontDataUrl })
     .promise;
