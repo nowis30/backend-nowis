@@ -20,7 +20,8 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
-    "seed": "ts-node ./src/scripts/seed.ts"
+    "seed": "ts-node ./src/scripts/seed.ts",
+    "test:telemetry": "ts-node ./src/scripts/testTelemetry.ts"
   },
   "prisma": {
     "seed": "ts-node ./src/scripts/seed.ts"

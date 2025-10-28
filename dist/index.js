@@ -6,6 +6,7 @@ const env_1 = require("./server/env");
 const wealthSnapshotJob_1 = require("./server/jobs/wealthSnapshotJob");
 const logger_1 = require("./server/lib/logger");
 const runMigrations_1 = require("./server/lib/runMigrations");
+const monitoringJobs_1 = require("./server/jobs/monitoringJobs");
 // Render (et la plupart des PaaS) fournissent une variable d'env PORT et
 // exigent que l'application écoute sur 0.0.0.0 à ce port.
 async function main() {
@@ -27,6 +28,8 @@ async function main() {
                 runOnStart: true
             });
         }
+        // Optional monitoring jobs (health checks)
+        (0, monitoringJobs_1.startMonitoringJobs)();
     });
 }
 void main();
