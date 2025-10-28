@@ -43,6 +43,22 @@ class NodeCanvasFactory {
   }
 }
 
+function normalizeTextForDedup(input: any): string {
+  try {
+    const s = String(input ?? '')
+      .normalize('NFD') // décompose accents
+      .replace(/[\u0300-\u036f]/g, '') // enlève diacritiques
+      .toLowerCase()
+      // remplace toute ponctuation et séparateurs par un espace
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .replace(/\s+/g, ' ') // compresse espaces
+      .trim();
+    return s;
+  } catch {
+    return String(input ?? '').trim().toLowerCase();
+  }
+}
+
 function isAzureProvider(): boolean {
   if (env.OPENAI_PROVIDER === 'azure') return true;
   const base = env.OPENAI_BASE_URL || '';
@@ -369,7 +385,7 @@ export async function extractPersonalTaxReturn(params: {
     if (!aggregated.rawText && parsed.rawText) aggregated.rawText = parsed.rawText;
   }
   // Déduplication renforcée des items et feuillets entre lots
-  const norm = (v: any) => String(v ?? '').trim().toLowerCase();
+  const norm = (v: any) => normalizeTextForDedup(v);
   // Items: clé = category|label(norm)|source(norm)|slipType(norm)|amount(2d)
   if (aggregated.items?.length) {
     const seen = new Set<string>();
