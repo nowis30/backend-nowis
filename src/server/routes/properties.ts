@@ -17,6 +17,7 @@ import {
 } from '../services/attachmentStorage';
 import { env } from '../env';
 import { extractExpenseFromAttachment } from '../services/attachmentsExtractor';
+import { computePropertyDistribution, simulateSaleOrRefi } from '../services/propertyOwnership';
 
 type DecimalLike = unknown;
 
@@ -1021,3 +1022,118 @@ propertiesRouter.put(
 );
 
 export { propertiesRouter };
+
+// ---- Co‑propriété et simulations ----
+
+const ownershipEntrySchema = z.object({
+  shareholderId: z.coerce.number().int().positive(),
+  ownershipPercent: z.coerce.number().min(0).max(100),
+  priorityReturnCap: optionalNonNegativeNumber,
+  notes: z.string().trim().optional()
+});
+
+propertiesRouter.get('/:id/ownership', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    const property = await prisma.property.findFirst({ where: { id, userId: req.userId } });
+    if (!property) return res.status(404).json({ error: 'Immeuble introuvable.' });
+    const owners = await (prisma as any).propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
+    const normalized = owners.map((o: any) => ({
+      id: o.id,
+      shareholderId: o.shareholderId,
+      ownershipPercent: Number(o.ownershipPercent ?? 0),
+      priorityReturnCap: o.priorityReturnCap == null ? null : Number(o.priorityReturnCap),
+      notes: o.notes ?? null,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt
+    }));
+    const sumPct = normalized.reduce((s: number, o: any) => s + (o.ownershipPercent || 0), 0);
+    res.json({ owners: normalized, sumPercent: sumPct });
+  } catch (error) {
+    next(error);
+  }
+});
+
+propertiesRouter.put('/:id/ownership', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    const body = z.object({ owners: z.array(ownershipEntrySchema).min(1) }).parse(req.body);
+    const property = await prisma.property.findFirst({ where: { id, userId: req.userId } });
+    if (!property) return res.status(404).json({ error: 'Immeuble introuvable.' });
+
+    const sum = body.owners.reduce((s, o) => s + o.ownershipPercent, 0);
+    if (Math.abs(sum - 100) > 0.05) {
+      return res.status(400).json({ error: 'La somme des pourcentages doit être proche de 100%.' });
+    }
+
+    await prisma.$transaction([
+      (prisma as any).propertyCoOwner.deleteMany({ where: { propertyId: id } }),
+      ...(body.owners.map((o) => (
+        (prisma as any).propertyCoOwner.create({
+          data: {
+            propertyId: id,
+            shareholderId: o.shareholderId,
+            ownershipPercent: o.ownershipPercent,
+            priorityReturnCap: o.priorityReturnCap ?? null,
+            notes: o.notes ?? null
+          }
+        })
+      )))
+    ]);
+
+    const owners = await (prisma as any).propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
+    res.json({ owners });
+  } catch (error) {
+    next(error);
+  }
+});
+
+propertiesRouter.post('/:id/simulations/distribute-cashflow', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    const property = await prisma.property.findFirst({ where: { id, userId: req.userId } });
+    if (!property) return res.status(404).json({ error: 'Immeuble introuvable.' });
+
+    const payload = z.object({
+      periodStart: optionalDate,
+      periodEnd: optionalDate,
+      includeMortgagePayments: z.coerce.boolean().optional()
+    }).parse(req.body ?? {});
+
+    const result = await computePropertyDistribution({
+      propertyId: id,
+      periodStart: payload.periodStart,
+      periodEnd: payload.periodEnd,
+      includeMortgagePayments: payload.includeMortgagePayments ?? false
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+propertiesRouter.post('/:id/simulations/event', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    const property = await prisma.property.findFirst({ where: { id, userId: req.userId } });
+    if (!property) return res.status(404).json({ error: 'Immeuble introuvable.' });
+
+    const payload = z.object({
+      eventType: z.enum(['SALE', 'REFINANCE']),
+      value: z.coerce.number().positive(),
+      closingCosts: optionalNonNegativeNumber,
+      debtOutstanding: optionalNonNegativeNumber
+    }).parse(req.body);
+
+    const result = await simulateSaleOrRefi({
+      propertyId: id,
+      eventType: payload.eventType,
+      value: payload.value,
+      closingCosts: payload.closingCosts ?? 0,
+      debtOutstanding: payload.debtOutstanding ?? undefined
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});

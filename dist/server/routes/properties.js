@@ -14,6 +14,7 @@ const amortization_1 = require("../services/amortization");
 const attachmentStorage_1 = require("../services/attachmentStorage");
 const env_1 = require("../env");
 const attachmentsExtractor_1 = require("../services/attachmentsExtractor");
+const propertyOwnership_1 = require("../services/propertyOwnership");
 const propertiesRouter = (0, express_1.Router)();
 exports.propertiesRouter = propertiesRouter;
 const upload = (0, multer_1.default)({
@@ -794,6 +795,114 @@ propertiesRouter.put('/:id/depreciation', async (req, res, next) => {
             additions: Number(depreciation.additions ?? 0),
             dispositions: Number(depreciation.dispositions ?? 0)
         });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+// ---- Co‑propriété et simulations ----
+const ownershipEntrySchema = zod_1.z.object({
+    shareholderId: zod_1.z.coerce.number().int().positive(),
+    ownershipPercent: zod_1.z.coerce.number().min(0).max(100),
+    priorityReturnCap: optionalNonNegativeNumber,
+    notes: zod_1.z.string().trim().optional()
+});
+propertiesRouter.get('/:id/ownership', async (req, res, next) => {
+    try {
+        const { id } = idParamSchema.parse(req.params);
+        const property = await prisma_1.prisma.property.findFirst({ where: { id, userId: req.userId } });
+        if (!property)
+            return res.status(404).json({ error: 'Immeuble introuvable.' });
+        const owners = await prisma_1.prisma.propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
+        const normalized = owners.map((o) => ({
+            id: o.id,
+            shareholderId: o.shareholderId,
+            ownershipPercent: Number(o.ownershipPercent ?? 0),
+            priorityReturnCap: o.priorityReturnCap == null ? null : Number(o.priorityReturnCap),
+            notes: o.notes ?? null,
+            createdAt: o.createdAt,
+            updatedAt: o.updatedAt
+        }));
+        const sumPct = normalized.reduce((s, o) => s + (o.ownershipPercent || 0), 0);
+        res.json({ owners: normalized, sumPercent: sumPct });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+propertiesRouter.put('/:id/ownership', async (req, res, next) => {
+    try {
+        const { id } = idParamSchema.parse(req.params);
+        const body = zod_1.z.object({ owners: zod_1.z.array(ownershipEntrySchema).min(1) }).parse(req.body);
+        const property = await prisma_1.prisma.property.findFirst({ where: { id, userId: req.userId } });
+        if (!property)
+            return res.status(404).json({ error: 'Immeuble introuvable.' });
+        const sum = body.owners.reduce((s, o) => s + o.ownershipPercent, 0);
+        if (Math.abs(sum - 100) > 0.05) {
+            return res.status(400).json({ error: 'La somme des pourcentages doit être proche de 100%.' });
+        }
+        await prisma_1.prisma.$transaction([
+            prisma_1.prisma.propertyCoOwner.deleteMany({ where: { propertyId: id } }),
+            ...(body.owners.map((o) => (prisma_1.prisma.propertyCoOwner.create({
+                data: {
+                    propertyId: id,
+                    shareholderId: o.shareholderId,
+                    ownershipPercent: o.ownershipPercent,
+                    priorityReturnCap: o.priorityReturnCap ?? null,
+                    notes: o.notes ?? null
+                }
+            }))))
+        ]);
+        const owners = await prisma_1.prisma.propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
+        res.json({ owners });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+propertiesRouter.post('/:id/simulations/distribute-cashflow', async (req, res, next) => {
+    try {
+        const { id } = idParamSchema.parse(req.params);
+        const property = await prisma_1.prisma.property.findFirst({ where: { id, userId: req.userId } });
+        if (!property)
+            return res.status(404).json({ error: 'Immeuble introuvable.' });
+        const payload = zod_1.z.object({
+            periodStart: optionalDate,
+            periodEnd: optionalDate,
+            includeMortgagePayments: zod_1.z.coerce.boolean().optional()
+        }).parse(req.body ?? {});
+        const result = await (0, propertyOwnership_1.computePropertyDistribution)({
+            propertyId: id,
+            periodStart: payload.periodStart,
+            periodEnd: payload.periodEnd,
+            includeMortgagePayments: payload.includeMortgagePayments ?? false
+        });
+        res.json(result);
+    }
+    catch (error) {
+        next(error);
+    }
+});
+propertiesRouter.post('/:id/simulations/event', async (req, res, next) => {
+    try {
+        const { id } = idParamSchema.parse(req.params);
+        const property = await prisma_1.prisma.property.findFirst({ where: { id, userId: req.userId } });
+        if (!property)
+            return res.status(404).json({ error: 'Immeuble introuvable.' });
+        const payload = zod_1.z.object({
+            eventType: zod_1.z.enum(['SALE', 'REFINANCE']),
+            value: zod_1.z.coerce.number().positive(),
+            closingCosts: optionalNonNegativeNumber,
+            debtOutstanding: optionalNonNegativeNumber
+        }).parse(req.body);
+        const result = await (0, propertyOwnership_1.simulateSaleOrRefi)({
+            propertyId: id,
+            eventType: payload.eventType,
+            value: payload.value,
+            closingCosts: payload.closingCosts ?? 0,
+            debtOutstanding: payload.debtOutstanding ?? undefined
+        });
+        res.json(result);
     }
     catch (error) {
         next(error);

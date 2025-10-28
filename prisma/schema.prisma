@@ -61,6 +61,7 @@ model Property {
   attachments      Attachment[]
   rentalTaxStatements RentalTaxStatement[]
   freezeAssets       FreezeAsset[]
+  coOwners           PropertyCoOwner[]
 }
 
 model Company {
@@ -119,6 +120,7 @@ model Shareholder {
   uploadedDocuments UploadedDocument[]
   familyTrust       FamilyTrust?
   familyTrustBeneficiaries FamilyTrustBeneficiary[]
+  propertyCoOwnerships PropertyCoOwner[]
 }
 
 model CompanyShareholder {
@@ -553,9 +555,15 @@ model LeverageScenario {
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  collateralPropertyId Int?
+  targetPropertyId     Int?
+  collateralProperty   Property? @relation("CollateralProperty", fields: [collateralPropertyId], references: [id], onDelete: SetNull)
+  targetProperty       Property? @relation("TargetProperty", fields: [targetPropertyId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([companyId])
+  @@index([collateralPropertyId])
+  @@index([targetPropertyId])
 }
 
 enum AdvisorExpert {
@@ -1157,4 +1165,23 @@ model UploadedDocument {
 
   @@index([userId, domain])
   @@index([userId, taxYear])
+}
+
+// Relation de co‑propriété par immeuble
+model PropertyCoOwner {
+  id                Int         @id @default(autoincrement())
+  propertyId        Int
+  shareholderId     Int
+  ownershipPercent  Decimal     @db.Decimal(6, 3) // ex: 50.000 (%). Somme approximativement 100.
+  priorityReturnCap Decimal?    @db.Decimal(18, 2) // ex: 100000.00 montant prioritaire à rembourser lors de vente/refi
+  notes             String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, shareholderId])
+  @@index([propertyId])
+  @@index([shareholderId])
 }
