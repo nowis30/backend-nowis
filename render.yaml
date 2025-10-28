@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: nowis-backend
+    runtime: node
+    rootDir: .
+    plan: free
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run render-build
+    startCommand: npm run start:render
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_PDF_MAX_PAGES
+        value: ALL
+      # Raccourcit les builds si Puppeteer n'est pas nécessaire à la compilation
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "1"
+      # Ajoutez ces variables via le dashboard Render (ne pas commiter de secrets)
+      # - key: DATABASE_URL
+      #   sync: false
+      # - key: JWT_SECRET
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
