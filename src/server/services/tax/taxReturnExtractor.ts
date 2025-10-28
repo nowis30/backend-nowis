@@ -250,3 +250,106 @@ export async function extractPersonalTaxReturn(params: {
   const parsed = JSON.parse(content);
   return coerceExtraction(parsed);
 }
+
+export type ExtractedRentalSummary = {
+  formType?: 'T776' | 'TP128' | 'UNKNOWN';
+  taxYear?: number;
+  propertyAddress?: string;
+  propertyName?: string;
+  grossRents?: number;
+  otherIncome?: number;
+  totalExpenses?: number;
+  netIncome?: number;
+};
+
+function buildRentalPrompt(): string {
+  return [
+    'Si le document contient un formulaire de revenus locatifs (T776 fédéral ou TP-128 Québec), extrait un résumé minimal.',
+    'Retourne STRICTEMENT un JSON valide avec un tableau rentals. Si aucune info locative claire, retourne rentals: [].',
+    'Pour chaque immeuble/formulaire identifié, inclure: formType (T776|TP128|UNKNOWN), taxYear, propertyAddress, propertyName,',
+    'grossRents (nombre), otherIncome (nombre si connu, sinon 0), totalExpenses (nombre si connu), netIncome (nombre si connu).',
+    '',
+    'Schéma JSON attendu (rien d’autre):',
+    '{\n  "rentals": {\n    "formType"?: "T776"|"TP128"|"UNKNOWN",\n    "taxYear"?: number,\n    "propertyAddress"?: string,\n    "propertyName"?: string,\n    "grossRents"?: number,\n    "otherIncome"?: number,\n    "totalExpenses"?: number,\n    "netIncome"?: number\n  }[]\n}'
+  ].join('\n');
+}
+
+export async function extractRentalTaxSummaries(params: {
+  buffer: Uint8Array | Buffer;
+  contentType: string;
+}): Promise<ExtractedRentalSummary[]> {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY manquant: configurez une clé API pour l'extraction.");
+  }
+
+  const { contentType } = params;
+  let binary: Uint8Array;
+  // @ts-ignore
+  const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(params.buffer as any);
+  if (isBuffer) {
+    // @ts-ignore
+    binary = new Uint8Array(params.buffer as any);
+  } else if (params.buffer instanceof Uint8Array) {
+    binary = params.buffer as Uint8Array;
+  } else {
+    // @ts-ignore
+    binary = new Uint8Array(params.buffer as any);
+  }
+
+  let dataUrl: string;
+  if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
+    dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
+  } else if (/^image\/(png|jpe?g|webp|heic)$/i.test(contentType)) {
+    const buf = Buffer.from(binary);
+    dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
+  } else {
+    return [];
+  }
+
+  const azure = isAzureProvider();
+  const model = chooseVisionModel();
+  let url: string;
+  let headers: Record<string, string>;
+  const body: any = {
+    model,
+    messages: [
+      { role: 'system', content: 'Tu es un extracteur fiable et concis.' },
+      { role: 'user', content: [{ type: 'text', text: buildRentalPrompt() }, { type: 'image_url', image_url: { url: dataUrl } }] }
+    ],
+    temperature: 1,
+    response_format: { type: 'json_object' }
+  };
+
+  if (azure) {
+    const base = env.OPENAI_BASE_URL || '';
+    const deployment = env.OPENAI_AZURE_DEPLOYMENT;
+    const apiVersion = env.OPENAI_API_VERSION || '2024-02-15-preview';
+    if (!deployment) {
+      throw new Error('OPENAI_AZURE_DEPLOYMENT manquant pour Azure OpenAI.');
+    }
+    url = `${base.replace(/\/$/, '')}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
+    headers = { 'Content-Type': 'application/json', 'api-key': env.OPENAI_API_KEY };
+  } else {
+    const base = normalizeOpenAIBaseUrl(env.OPENAI_BASE_URL);
+    url = `${base.replace(/\/$/, '')}/chat/completions`;
+    headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` };
+  }
+
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    logger.warn({ status: res.status, text }, 'extractRentalTaxSummaries: OpenAI non-ok');
+    return [];
+  }
+  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const content = json.choices?.[0]?.message?.content ?? '';
+  if (!content) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(content) as { rentals?: ExtractedRentalSummary[] };
+    return Array.isArray(parsed?.rentals) ? parsed.rentals : [];
+  } catch {
+    return [];
+  }
+}

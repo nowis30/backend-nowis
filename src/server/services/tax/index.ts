@@ -1,1 +1,1 @@
-export { extractPersonalTaxReturn } from './taxReturnExtractor';
+export { extractPersonalTaxReturn, extractRentalTaxSummaries } from './taxReturnExtractor';

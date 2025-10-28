@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from '../../lib/prisma';
 import { env } from '../../env';
-import { extractPersonalTaxReturn } from '../../services/tax';
+import { extractPersonalTaxReturn, extractRentalTaxSummaries } from '../../services/tax';
+import type { RentalTaxFormType } from '@prisma/client';
 
 type IngestDomain = 'personal-income' | 'property' | 'company';
 
@@ -53,6 +54,33 @@ function normalizeCategory(input: string): string {
   return allowed.has(upper) ? upper : 'OTHER';
 }
 
+function parseAmount(input: unknown): number {
+  if (typeof input === 'number') {
+    return Number.isFinite(input) ? input : 0;
+  }
+  if (typeof input === 'string') {
+    const s = input.trim();
+    if (!s) return 0;
+    // Normalise formats FR/EN: enlever espaces insécables, gérer virgule décimale
+    // Cas 1: contient à la fois ',' et '.' → on suppose '.' pour décimales, supprimer les ',' de milliers
+    if (s.includes(',') && s.includes('.')) {
+      const cleaned = s.replace(/\s+/g, '').replace(/,/g, '');
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+    // Cas 2: contient seulement ',' → virgule décimale
+    if (s.includes(',')) {
+      const cleaned = s.replace(/\s+/g, '').replace(/,/g, '.');
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+    const cleaned = s.replace(/\s+/g, '');
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
 async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
   if (!hasOpenAiKey()) {
     throw Object.assign(
@@ -80,7 +108,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
   const items = (extraction.items || []).map((it: any) => ({
     category: normalizeCategory(String(it.category || 'OTHER')),
     label: String(it.label || '').trim(),
-    amount: Number(it.amount || 0),
+    amount: parseAmount(it.amount),
     source: it.source ? String(it.source) : null,
     slipType: it.slipType ? String(it.slipType) : null
   }));
@@ -130,10 +158,103 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     }
   }
 
+  // Tentative: extraire aussi un résumé locatif (T776/TP-128) et pré-remplir un état par immeuble si détecté
+  const rentalSummaries = await extractRentalTaxSummaries({
+    buffer: req.file.buffer,
+    contentType: req.file.contentType
+  }).catch(() => [] as any[]);
+
+  const createdRentalStatementIds: number[] = [];
+  if (Array.isArray(rentalSummaries) && rentalSummaries.length > 0) {
+    const props = await prisma.property.findMany({
+      where: { userId: req.userId },
+      select: { id: true, name: true, address: true }
+    });
+
+    function bestMatchPropertyId(propertyName?: string | null, propertyAddress?: string | null): number | null {
+      const name = (propertyName ?? '').toLowerCase();
+      const addr = (propertyAddress ?? '').toLowerCase();
+      let bestId: number | null = null;
+      let bestScore = 0;
+      for (const p of props) {
+        const pn = (p.name ?? '').toLowerCase();
+        const pa = (p.address ?? '').toLowerCase();
+        let score = 0;
+        if (name && pn && (pn.includes(name) || name.includes(pn))) score += 2;
+        if (addr) {
+          if (pa && (pa.includes(addr) || addr.includes(pa))) score += 2;
+          if (pn && addr.includes(pn)) score += 1;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestId = p.id;
+        }
+      }
+      return bestId;
+    }
+
+    for (const r of rentalSummaries) {
+      const formType: RentalTaxFormType = (r?.formType === 'TP128' ? 'TP128' : 'T776');
+      const year = Number(r?.taxYear ?? targetYear);
+      if (!Number.isFinite(year)) continue;
+
+      const grossRents = parseAmount(r?.grossRents);
+      const otherIncome = parseAmount(r?.otherIncome);
+      const totalExpenses = parseAmount(r?.totalExpenses);
+      const netIncome = parseAmount(r?.netIncome) || grossRents + otherIncome - totalExpenses;
+      if (grossRents === 0 && otherIncome === 0 && totalExpenses === 0 && netIncome === 0) {
+        continue;
+      }
+
+      const propertyId = bestMatchPropertyId(r?.propertyName, r?.propertyAddress);
+
+      const payload = {
+        metadata: [
+          r?.propertyAddress
+            ? { key: 'propertyAddress', label: "Adresse de l'immeuble", type: 'textarea', value: r.propertyAddress }
+            : undefined,
+          { key: 'taxYear', label: 'Année fiscale', type: 'number', value: year }
+        ].filter(Boolean),
+        income: { grossRents, otherIncome, totalIncome: grossRents + otherIncome },
+        expenses: [
+          { key: 'other', label: 'Autres dépenses', amount: totalExpenses }
+        ],
+        totals: { totalExpenses, netIncome }
+      } as any;
+
+      const computed = {
+        grossRents,
+        otherIncome,
+        totalIncome: grossRents + otherIncome,
+        expenses: [{ key: 'other', label: 'Autres dépenses', amount: totalExpenses }],
+        totalExpenses,
+        netIncome,
+        mortgageInterest: 0,
+        capitalCostAllowance: 0,
+        incomeDetails: [],
+        ccaDetails: []
+      } as any;
+
+      const created = await prisma.rentalTaxStatement.create({
+        data: {
+          userId: req.userId,
+          propertyId: propertyId ?? null,
+          formType,
+          taxYear: year,
+          payload: payload as any,
+          computed: computed as any,
+          notes: r?.propertyName ? `Import IA – ${r.propertyName}` : 'Import IA – Résumé locatif'
+        }
+      });
+      createdRentalStatementIds.push(created.id);
+    }
+  }
+
   return {
     shareholderId,
     taxYear: targetYear,
     extracted: items,
-    createdIds
+    createdIds,
+    rentalStatements: createdRentalStatementIds
   };
 }
