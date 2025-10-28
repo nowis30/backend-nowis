@@ -77,7 +77,12 @@ async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promis
   // Crée une copie ArrayBuffer détachée pour éviter tout aliasing de mémoire avec Buffer
   const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
   const pure = new Uint8Array(ab);
-  const pdfDocument = await pdfjsLib.getDocument({ data: pure, disableWorker: true }).promise;
+  // Fournit l'URL des polices standard pour éviter les warnings en prod
+  const version = (pdfjsLib as any)?.version || 'latest';
+  const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  const pdfDocument = await pdfjsLib
+    .getDocument({ data: pure, disableWorker: true, standardFontDataUrl })
+    .promise;
   if (pdfDocument.numPages < 1) {
     throw new Error('PDF vide: aucune page à analyser.');
   }
@@ -211,7 +216,9 @@ export async function extractPersonalTaxReturn(params: {
       { role: 'system', content: 'Tu es un extracteur de formulaires fiscaux fiable et strict.' },
       { role: 'user', content: [{ type: 'text', text: buildPrompt() }, { type: 'image_url', image_url: { url: dataUrl } }] }
     ],
-    temperature: 0.1,
+    // Certains fournisseurs (ou déploiements) refusent temperature≠1 —
+    // on s'aligne sur la valeur par défaut (1) pour compat.
+    temperature: 1,
     response_format: { type: 'json_object' }
   };
 

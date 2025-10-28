@@ -52,7 +52,9 @@ async function renderPdfFirstPageToDataUrl(filePath: string): Promise<string> {
   // pdfjs attend un Uint8Array pur, pas un Buffer Node
   const typed = Buffer.isBuffer(buffer) ? new Uint8Array(buffer) : (buffer as unknown as Uint8Array);
   const pdfjsLib = await loadPdfJs();
-  const pdfDocument = await pdfjsLib.getDocument({ data: typed, disableWorker: true }).promise;
+  const version = (pdfjsLib as any)?.version || 'latest';
+  const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  const pdfDocument = await pdfjsLib.getDocument({ data: typed, disableWorker: true, standardFontDataUrl }).promise;
   if (pdfDocument.numPages < 1) {
     throw new Error('PDF vide: aucune page à analyser.');
   }
@@ -167,7 +169,7 @@ export async function extractExpenseFromAttachment(storagePath: string, contentT
         ]
       }
     ],
-    temperature: 0.1,
+    temperature: 1,
     response_format: { type: 'json_object' }
   };
 
