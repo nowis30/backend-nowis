@@ -118,7 +118,11 @@ async function main() {
     await new Promise((r) => setTimeout(r, 1000));
     const events = await fetchJson('GET', `${BASE_URL}/api/monitoring/events`, undefined, auth);
     console.log(`Events status [try ${attempt}]:`, events.status);
-    const items = ((events.json as any[]) || []) as any[];
+    if (!events.ok) {
+      continue; // serveur pas prêt ou erreur transitoire
+    }
+    const raw = events.json as unknown;
+    const items = Array.isArray(raw) ? (raw as any[]) : [];
     lastItems = items;
     const recent = items.slice(0, 5);
     const hasLeverage = recent.some((e: any) => {
