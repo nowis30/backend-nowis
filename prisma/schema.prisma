@@ -1143,6 +1143,8 @@ model UploadedDocument {
   contentType  String
   size         Int
   storagePath  String
+  // Copie binaire persistée pour résilience (fallback si le fichier local est manquant en prod)
+  content      Bytes?
   checksum     String?
   taxYear      Int?
   shareholderId Int?

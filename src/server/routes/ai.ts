@@ -145,12 +145,23 @@ aiRouter.post('/reingest', async (req: AuthenticatedRequest, res: Response, next
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
 
     const absPath = resolveUserDocumentPath((doc as any).storagePath);
-    const buffer = await fs.readFile(absPath);
+    let buffer: Buffer;
+    try {
+      buffer = await fs.readFile(absPath);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' && (doc as any).content) {
+        // Fallback: utiliser le binaire stocké en base si le fichier local est manquant (environnements éphémères)
+        buffer = (doc as any).content as Buffer;
+      } else {
+        throw err;
+      }
+    }
 
     const result = await ingestDocument({
       userId: req.userId!,
       domain,
-      file: { buffer, contentType: (doc as any).contentType || 'application/pdf', filename: (doc as any).originalName },
+  file: { buffer, contentType: (doc as any).contentType || 'application/pdf', filename: (doc as any).originalName },
       options: {
         autoCreate: (autoCreate ?? 'false') === 'true',
         shareholderId: shareholderId ?? undefined,

@@ -103,6 +103,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
       contentType: req.file.contentType,
       size: req.file.buffer.byteLength,
       storagePath: saved.storagePath,
+      content: req.file.buffer,
       checksum: saved.checksum,
       taxYear: req.options?.taxYear ?? null,
       shareholderId: req.options?.shareholderId ?? null

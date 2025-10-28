@@ -71,6 +71,7 @@ documentsRouter.post('/', upload.single('file'), async (req: AuthenticatedReques
         contentType: req.file.mimetype,
         size: req.file.size,
         storagePath: saved.storagePath,
+        content: req.file.buffer,
         checksum: saved.checksum,
         taxYear: taxYear ?? null,
         shareholderId: shareholderId ?? null
@@ -104,14 +105,25 @@ documentsRouter.get('/:id/download', async (req: AuthenticatedRequest, res: Resp
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
 
     const abs = resolveUserDocumentPath(doc.storagePath);
-    const stat = await fs.stat(abs);
-
-    res.setHeader('Content-Type', doc.contentType || 'application/octet-stream');
-    res.setHeader('Content-Length', String(stat.size));
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.originalName)}"`);
-
-    const stream = (await import('fs')).createReadStream(abs);
-    stream.pipe(res);
+    try {
+      const stat = await fs.stat(abs);
+      res.setHeader('Content-Type', doc.contentType || 'application/octet-stream');
+      res.setHeader('Content-Length', String(stat.size));
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.originalName)}"`);
+      const stream = (await import('fs')).createReadStream(abs);
+      stream.pipe(res);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' && (doc as any).content) {
+        const buf = (doc as any).content as Buffer;
+        res.setHeader('Content-Type', doc.contentType || 'application/octet-stream');
+        res.setHeader('Content-Length', String(buf.byteLength));
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.originalName)}"`);
+        res.end(buf);
+      } else {
+        throw err;
+      }
+    }
   } catch (error) {
     next(error);
   }
