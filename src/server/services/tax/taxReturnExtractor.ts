@@ -137,19 +137,22 @@ function coerceExtraction(data: any): ExtractedPersonalTaxReturn {
 }
 
 export async function extractPersonalTaxReturn(params: {
-  buffer: Buffer;
+  buffer: Uint8Array | Buffer;
   contentType: string;
 }): Promise<ExtractedPersonalTaxReturn> {
   if (!env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY manquant: configurez une clé API pour l'extraction.");
   }
 
-  const { buffer, contentType } = params;
+  const { contentType } = params;
+  // Normalise en Uint8Array pour les lib tierces qui refusent Buffer
+  const binary = params.buffer instanceof Uint8Array ? params.buffer : new Uint8Array(params.buffer);
   let dataUrl: string;
   if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
-    dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(buffer);
+    dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary as unknown as Buffer);
   } else if (/^image\/(png|jpe?g|webp|heic)$/i.test(contentType)) {
-    dataUrl = `data:${contentType};base64,${buffer.toString('base64')}`;
+    const buf = Buffer.from(binary);
+    dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
   } else {
     throw new Error('Type de fichier non supporté (PDF ou image requis).');
   }
