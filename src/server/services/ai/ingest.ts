@@ -160,19 +160,31 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
   if (req.options?.autoCreate) {
     for (const item of items) {
       if (!(item.label && item.amount > 0)) continue;
-      const created = await prisma.personalIncome.create({
-        data: {
+      // Déduplication simple: éviter doublons exacts label+amount+année
+      const exists = await prisma.personalIncome.findFirst({
+        where: {
           shareholderId: shareholderId!,
           taxYear: targetYear,
-          category: item.category,
           label: item.label,
-          source: item.source,
-          slipType: item.slipType,
-          amount: item.amount
+          amount: item.amount as any
         },
         select: { id: true }
       });
-      createdIds.push(created.id);
+      if (!exists) {
+        const created = await prisma.personalIncome.create({
+          data: {
+            shareholderId: shareholderId!,
+            taxYear: targetYear,
+            category: item.category,
+            label: item.label,
+            source: item.source,
+            slipType: item.slipType,
+            amount: item.amount
+          },
+          select: { id: true }
+        });
+        createdIds.push(created.id);
+      }
     }
   }
 

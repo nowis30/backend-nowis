@@ -6,6 +6,8 @@ import { authenticated, type AuthenticatedRequest } from '../middlewares/authent
 import { runLeverageConversation } from '../services/ai/coordinationAI';
 import { logger } from '../lib/logger';
 import { ingestDocument } from '../services/ai/ingest';
+import { resolveUserDocumentPath } from '../services/documentStorage';
+import { promises as fs } from 'fs';
 
 const aiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -121,3 +123,43 @@ aiRouter.post(
     }
   }
 );
+
+// Re-ingérer un document existant (sans ré-upload) — utile pour tests live
+const reingestQuerySchema = z.object({
+  domain: z.enum(['personal-income', 'property', 'company']),
+  documentId: z.coerce.number().int().positive(),
+  autoCreate: z
+    .preprocess((v) => (typeof v === 'string' ? v.toLowerCase().trim() : v), z.enum(['true', 'false']).optional())
+    .optional(),
+  shareholderId: z.coerce.number().int().positive().optional(),
+  taxYear: z.coerce.number().int().min(2000).max(new Date().getFullYear() + 1).optional()
+});
+
+aiRouter.post('/reingest', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { domain, documentId, autoCreate, shareholderId, taxYear } = reingestQuerySchema.parse(req.query);
+
+    const { prisma } = await import('../lib/prisma');
+    const doc = await (prisma as any).uploadedDocument.findFirst({ where: { id: documentId, userId: req.userId! } });
+
+    if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
+
+    const absPath = resolveUserDocumentPath((doc as any).storagePath);
+    const buffer = await fs.readFile(absPath);
+
+    const result = await ingestDocument({
+      userId: req.userId!,
+      domain,
+      file: { buffer, contentType: (doc as any).contentType || 'application/pdf', filename: (doc as any).originalName },
+      options: {
+        autoCreate: (autoCreate ?? 'false') === 'true',
+        shareholderId: shareholderId ?? undefined,
+        taxYear: taxYear ?? (doc as any).taxYear ?? undefined
+      }
+    });
+
+    res.json({ ...result, documentId });
+  } catch (error) {
+    next(error);
+  }
+});

@@ -3,6 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.errorHandler = errorHandler;
 const zod_1 = require("zod");
 function errorHandler(err, _req, res, _next) {
+    // Gestions spécifiques pour les erreurs de téléversement (multer)
+    if (typeof err === 'object' && err !== null && err.name === 'MulterError') {
+        const code = err.code;
+        if (code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ error: 'Fichier trop volumineux (max 20 Mo).' });
+        }
+        return res.status(400).json({ error: err.message || 'Erreur de téléversement.' });
+    }
     if (err instanceof zod_1.ZodError) {
         return res.status(400).json({
             error: 'Requête invalide.',
