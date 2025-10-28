@@ -299,24 +299,6 @@ export async function extractPersonalTaxReturn(params: {
   const model = chooseVisionModel();
   let url: string;
   let headers: Record<string, string>;
-  const body: any = {
-    model,
-    messages: [
-      { role: 'system', content: 'Tu es un extracteur de formulaires fiscaux fiable et strict.' },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: buildPrompt() },
-          ...dataUrls.map((url) => ({ type: 'image_url', image_url: { url } }))
-        ]
-      }
-    ],
-    // Certains fournisseurs (ou déploiements) refusent temperature≠1 —
-    // on s'aligne sur la valeur par défaut (1) pour compat.
-    temperature: 1,
-    response_format: { type: 'json_object' }
-  };
-
   if (azure) {
     const base = env.OPENAI_BASE_URL || '';
     const deployment = env.OPENAI_AZURE_DEPLOYMENT;
@@ -332,18 +314,63 @@ export async function extractPersonalTaxReturn(params: {
     headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` };
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`OpenAI error ${res.status}: ${text || res.statusText}`);
+  const batchSize = Math.max(1, Number(process.env.AI_PDF_BATCH_PAGES || 5));
+  const batches: string[][] = [];
+  for (let i = 0; i < dataUrls.length; i += batchSize) {
+    batches.push(dataUrls.slice(i, i + batchSize));
   }
-  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const content = json.choices?.[0]?.message?.content ?? '';
-  if (!content) {
-    throw new Error('Réponse OpenAI vide.');
+
+  let aggregated: ExtractedPersonalTaxReturn = { taxYear: undefined, items: [], slips: [], confidence: 0 };
+  for (const pages of batches) {
+    const body: any = {
+      model,
+      messages: [
+        { role: 'system', content: 'Tu es un extracteur de formulaires fiscaux fiable et strict.' },
+        { role: 'user', content: [{ type: 'text', text: buildPrompt() }, ...pages.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }
+      ],
+      temperature: 1,
+      response_format: { type: 'json_object' }
+    };
+
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`OpenAI error ${res.status}: ${text || res.statusText}`);
+    }
+    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = json.choices?.[0]?.message?.content ?? '';
+    if (!content) continue;
+    const parsed = coerceExtraction(JSON.parse(content));
+    // Agrégation simple
+    if (!aggregated.taxYear && parsed.taxYear) aggregated.taxYear = parsed.taxYear;
+    aggregated.items.push(...(parsed.items || []));
+    if (parsed.slips && parsed.slips.length) {
+      aggregated.slips = [...(aggregated.slips || []), ...parsed.slips];
+    }
+    aggregated.confidence = Math.max(aggregated.confidence || 0, parsed.confidence || 0);
+    // Conserver rawText du premier batch contenant du texte
+    if (!aggregated.rawText && parsed.rawText) aggregated.rawText = parsed.rawText;
   }
-  const parsed = JSON.parse(content);
-  return coerceExtraction(parsed);
+  // Déduplication simple des items et feuillets entre lots
+  if (aggregated.items?.length) {
+    const seen = new Set<string>();
+    aggregated.items = aggregated.items.filter((i: any) => {
+      const key = `${(i.section||'').toLowerCase()}|${(i.label||'').toLowerCase()}|${i.amount ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  if (aggregated.slips?.length) {
+    const seen = new Set<string>();
+    aggregated.slips = aggregated.slips.filter((s: any) => {
+      const key = `${(s.slipType||'').toLowerCase()}|${(s.issuer||'').toLowerCase()}|${s.taxYear || aggregated.taxYear || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  return aggregated;
 }
 
 export type ExtractedRentalSummary = {
@@ -405,22 +432,6 @@ export async function extractRentalTaxSummaries(params: {
   const model = chooseVisionModel();
   let url: string;
   let headers: Record<string, string>;
-  const body: any = {
-    model,
-    messages: [
-      { role: 'system', content: 'Tu es un extracteur fiable et concis.' },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: buildRentalPrompt() },
-          ...dataUrls.map((url) => ({ type: 'image_url', image_url: { url } }))
-        ]
-      }
-    ],
-    temperature: 1,
-    response_format: { type: 'json_object' }
-  };
-
   if (azure) {
     const base = env.OPENAI_BASE_URL || '';
     const deployment = env.OPENAI_AZURE_DEPLOYMENT;
@@ -436,21 +447,37 @@ export async function extractRentalTaxSummaries(params: {
     headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` };
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    logger.warn({ status: res.status, text }, 'extractRentalTaxSummaries: OpenAI non-ok');
-    return [];
+  const batchSize = Math.max(1, Number(process.env.AI_PDF_BATCH_PAGES || 5));
+  const batches: string[][] = [];
+  for (let i = 0; i < dataUrls.length; i += batchSize) {
+    batches.push(dataUrls.slice(i, i + batchSize));
   }
-  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const content = json.choices?.[0]?.message?.content ?? '';
-  if (!content) {
-    return [];
+  const all: ExtractedRentalSummary[] = [];
+  for (const pages of batches) {
+    const body: any = {
+      model,
+      messages: [
+        { role: 'system', content: 'Tu es un extracteur fiable et concis.' },
+        { role: 'user', content: [{ type: 'text', text: buildRentalPrompt() }, ...pages.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }
+      ],
+      temperature: 1,
+      response_format: { type: 'json_object' }
+    };
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      logger.warn({ status: res.status, text }, 'extractRentalTaxSummaries: OpenAI non-ok');
+      continue;
+    }
+    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = json.choices?.[0]?.message?.content ?? '';
+    if (!content) continue;
+    try {
+      const parsed = JSON.parse(content) as { rentals?: ExtractedRentalSummary[] };
+      if (Array.isArray(parsed?.rentals)) all.push(...parsed.rentals);
+    } catch {
+      // ignore batch parse error
+    }
   }
-  try {
-    const parsed = JSON.parse(content) as { rentals?: ExtractedRentalSummary[] };
-    return Array.isArray(parsed?.rentals) ? parsed.rentals : [];
-  } catch {
-    return [];
-  }
+  return all;
 }
