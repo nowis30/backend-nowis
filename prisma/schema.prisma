@@ -16,6 +16,7 @@ model User {
   properties   Property[]
   companies    Company[]
   shareholders Shareholder[]
+  uploadedDocuments UploadedDocument[]
   roles        UserRole[]
   leveragedBuybackScenarios LeveragedBuybackScenario[]
   rentalTaxStatements      RentalTaxStatement[]
@@ -115,6 +116,7 @@ model Shareholder {
   shareholderLoans  ShareholderLoan[]
   personalTaxReturns PersonalTaxReturn[]
   personalIncomes   PersonalIncome[]
+  uploadedDocuments UploadedDocument[]
   familyTrust       FamilyTrust?
   familyTrustBeneficiaries FamilyTrustBeneficiary[]
 }
