@@ -59,7 +59,7 @@ function chooseVisionModel(): string {
   return env.OPENAI_MODEL_VISION || env.OPENAI_MODEL_TARGETED || env.OPENAI_MODEL || 'gpt-4o-mini';
 }
 
-async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Buffer): Promise<string> {
+async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promise<string> {
   const pdfjsLib = await loadPdfJs();
   const pdfDocument = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
   if (pdfDocument.numPages < 1) {
@@ -149,7 +149,7 @@ export async function extractPersonalTaxReturn(params: {
   const binary = params.buffer instanceof Uint8Array ? params.buffer : new Uint8Array(params.buffer);
   let dataUrl: string;
   if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
-    dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary as unknown as Buffer);
+  dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
   } else if (/^image\/(png|jpe?g|webp|heic)$/i.test(contentType)) {
     const buf = Buffer.from(binary);
     dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
