@@ -104,6 +104,41 @@ async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promis
   return `data:image/png;base64,${pngBuffer.toString('base64')}`;
 }
 
+async function renderPdfPagesToDataUrlsFromBuffer(
+  buffer: Uint8Array,
+  opts?: { maxPages?: number; scale?: number }
+): Promise<string[]> {
+  const maxPages = Math.max(1, Math.min(20, opts?.maxPages ?? Number(process.env.AI_PDF_MAX_PAGES || 5)));
+  const scale = opts?.scale ?? 1.8;
+
+  const pdfjsLib = await loadPdfJs();
+  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  const pure = new Uint8Array(ab);
+  const version = (pdfjsLib as any)?.version || 'latest';
+  const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
+  const pdfDocument = await pdfjsLib
+    .getDocument({ data: pure, disableWorker: true, standardFontDataUrl })
+    .promise;
+  const pageCount = Math.min(pdfDocument.numPages, maxPages);
+  const canvasFactory = new NodeCanvasFactory();
+  const images: string[] = [];
+  try {
+    for (let p = 1; p <= pageCount; p++) {
+      const page = await pdfDocument.getPage(p);
+      const viewport = page.getViewport({ scale });
+      const { canvas, context } = canvasFactory.create(viewport.width, viewport.height);
+      const renderContext = { canvasContext: context, viewport, canvasFactory } as any;
+      await page.render(renderContext).promise;
+      const pngBuffer = canvas.toBuffer('image/png');
+      images.push(`data:image/png;base64,${pngBuffer.toString('base64')}`);
+      canvasFactory.destroy({ canvas, context });
+    }
+  } finally {
+    pdfDocument.cleanup();
+  }
+  return images;
+}
+
 export type ExtractedPersonalIncomeItem = {
   category: string; // EMPLOYMENT | ... | OTHER
   label: string;
@@ -232,17 +267,17 @@ export async function extractPersonalTaxReturn(params: {
     },
     'ai:ingest: input binary normalized'
   );
-  let dataUrl: string;
+  let dataUrls: string[];
   if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
     try {
-      dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
+      dataUrls = await renderPdfPagesToDataUrlsFromBuffer(binary, { maxPages: Number(process.env.AI_PDF_MAX_PAGES || 5) });
     } catch (e) {
-      logger.error({ err: e }, 'ai:pdf: failed to render first page');
+      logger.error({ err: e }, 'ai:pdf: failed to render pages');
       throw e;
     }
   } else if (/^image\/(png|jpe?g|webp|heic)$/i.test(contentType)) {
     const buf = Buffer.from(binary);
-    dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
+    dataUrls = [`data:${contentType};base64,${buf.toString('base64')}`];
   } else {
     throw new Error('Type de fichier non supporté (PDF ou image requis).');
   }
@@ -255,7 +290,13 @@ export async function extractPersonalTaxReturn(params: {
     model,
     messages: [
       { role: 'system', content: 'Tu es un extracteur de formulaires fiscaux fiable et strict.' },
-      { role: 'user', content: [{ type: 'text', text: buildPrompt() }, { type: 'image_url', image_url: { url: dataUrl } }] }
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildPrompt() },
+          ...dataUrls.map((url) => ({ type: 'image_url', image_url: { url } }))
+        ]
+      }
     ],
     // Certains fournisseurs (ou déploiements) refusent temperature≠1 —
     // on s'aligne sur la valeur par défaut (1) pour compat.
@@ -337,12 +378,12 @@ export async function extractRentalTaxSummaries(params: {
     binary = new Uint8Array(params.buffer as any);
   }
 
-  let dataUrl: string;
+  let dataUrls: string[];
   if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
-    dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
+    dataUrls = await renderPdfPagesToDataUrlsFromBuffer(binary, { maxPages: Number(process.env.AI_PDF_MAX_PAGES || 5) });
   } else if (/^image\/(png|jpe?g|webp|heic)$/i.test(contentType)) {
     const buf = Buffer.from(binary);
-    dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
+    dataUrls = [`data:${contentType};base64,${buf.toString('base64')}`];
   } else {
     return [];
   }
@@ -355,7 +396,13 @@ export async function extractRentalTaxSummaries(params: {
     model,
     messages: [
       { role: 'system', content: 'Tu es un extracteur fiable et concis.' },
-      { role: 'user', content: [{ type: 'text', text: buildRentalPrompt() }, { type: 'image_url', image_url: { url: dataUrl } }] }
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildRentalPrompt() },
+          ...dataUrls.map((url) => ({ type: 'image_url', image_url: { url } }))
+        ]
+      }
     ],
     temperature: 1,
     response_format: { type: 'json_object' }
