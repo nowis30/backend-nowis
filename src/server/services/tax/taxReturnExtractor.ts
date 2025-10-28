@@ -2,6 +2,7 @@
 import { createCanvas, type Canvas, type SKRSContext2D } from '@napi-rs/canvas';
 
 import { env } from '../../env';
+import { logger } from '../../lib/logger';
 
 type PdfJsModule = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
 
@@ -60,6 +61,18 @@ function chooseVisionModel(): string {
 }
 
 async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promise<string> {
+  // Diagnostic: vérifier les types en prod
+  // @ts-ignore Buffer may be undefined in some runtimes
+  const seenAsBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(buffer as any);
+  logger.info(
+    {
+      where: 'renderPdfFirstPageToDataUrlFromBuffer',
+      seenAsBuffer,
+      constructor: (buffer as any)?.constructor?.name,
+      byteLength: buffer?.byteLength
+    },
+    'ai:pdf: start render first page'
+  );
   const pdfjsLib = await loadPdfJs();
   const pdfDocument = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
   if (pdfDocument.numPages < 1) {
@@ -160,9 +173,24 @@ export async function extractPersonalTaxReturn(params: {
     // @ts-ignore any to Uint8Array
     binary = new Uint8Array(params.buffer as any);
   }
+  logger.info(
+    {
+      where: 'extractPersonalTaxReturn',
+      contentType,
+      receivedType: (params.buffer as any)?.constructor?.name,
+      wasBuffer: isBuffer,
+      byteLength: isBuffer ? (params.buffer as any)?.length : (params.buffer as any)?.byteLength
+    },
+    'ai:ingest: input binary normalized'
+  );
   let dataUrl: string;
   if (/^application\/(pdf|x-pdf)$/i.test(contentType)) {
-  dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
+    try {
+      dataUrl = await renderPdfFirstPageToDataUrlFromBuffer(binary);
+    } catch (e) {
+      logger.error({ err: e }, 'ai:pdf: failed to render first page');
+      throw e;
+    }
   } else if (/^image\/(png|jpe?g|webp|heic)$/i.test(contentType)) {
     const buf = Buffer.from(binary);
     dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
