@@ -1,4 +1,5 @@
 import { getProfileSummary, type ProfileSummary } from './profileSummaryService';
+import { prisma } from '../lib/prisma';
 
 export type InsightSeverity = 'info' | 'warning' | 'critical';
 
@@ -77,5 +78,41 @@ export function deriveProfileInsights(summary: ProfileSummary): ProfileInsight[]
 
 export async function getProfileInsights(userId: number): Promise<ProfileInsight[]> {
   const summary = await getProfileSummary(userId);
-  return deriveProfileInsights(summary);
+  const insights = deriveProfileInsights(summary);
+
+  // Ajouter des recommandations basées sur l'impôt personnel (si disponible)
+  const latestPersonal = await prisma.personalTaxReturn.findFirst({
+    where: { shareholder: { userId } },
+    orderBy: { taxYear: 'desc' },
+    select: { taxYear: true, taxableIncome: true, federalTax: true, provincialTax: true }
+  });
+
+  if (latestPersonal) {
+    const monthlyNet = Number(latestPersonal.taxableIncome ?? 0) - (Number(latestPersonal.federalTax ?? 0) + Number(latestPersonal.provincialTax ?? 0));
+    const netSavings = monthlyNet / 12 - summary.totals.monthlyExpenses;
+    if (netSavings < 0) {
+      insights.push({
+        code: 'NEGATIVE_NET_SAVINGS',
+        severity: 'warning',
+        message: "Selon le dernier rapport d'impôt, l'épargne nette mensuelle estimée est négative. Réduire les dépenses ou augmenter les revenus.",
+        context: {
+          latestTaxYear: latestPersonal.taxYear ?? 0,
+          estimatedMonthlyNetIncome: Math.round(monthlyNet / 12),
+          monthlyExpenses: Math.round(summary.totals.monthlyExpenses)
+        }
+      });
+    } else if (netSavings > 0) {
+      insights.push({
+        code: 'POSITIVE_NET_SAVINGS',
+        severity: 'info',
+        message: "Une épargne nette mensuelle est disponible selon l'impôt. Envisager des cotisations (ex.: CELI/RRSP) ou un plan d'investissement.",
+        context: {
+          latestTaxYear: latestPersonal.taxYear ?? 0,
+          estimatedMonthlySavings: Math.round(netSavings)
+        }
+      });
+    }
+  }
+
+  return insights;
 }

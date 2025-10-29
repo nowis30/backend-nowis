@@ -69,6 +69,25 @@ export interface SummaryResponse {
   properties: SummaryKpi[];
   totals: SummaryTotals;
   corporate: CorporateSummary;
+  personal?: PersonalIncomeSummary;
+}
+
+export interface PersonalIncomeSummary {
+  latestTaxYear: number | null;
+  shareholderId: number | null;
+  taxableIncome: number;
+  employmentIncome: number;
+  businessIncome: number;
+  eligibleDividends: number;
+  nonEligibleDividends: number;
+  capitalGains: number;
+  deductions: number;
+  federalTax: number;
+  provincialTax: number;
+  balanceDue: number;
+  returnsCount: number;
+  slipsCount: number;
+  slipTypeCounts?: Array<{ slipType: string; count: number }>;
 }
 
 export interface CorporateSummary {
@@ -232,7 +251,7 @@ function calculateCca(
 }
 
 export async function buildSummary(userId: number): Promise<SummaryResponse> {
-  const [propertyRecords, companiesCount, shareholdersCount, shareClassesCount, shareTransactionAgg, statementAgg, resolutionsCount, latestStatement, latestResolution] =
+  const [propertyRecords, companiesCount, shareholdersCount, shareClassesCount, shareTransactionAgg, statementAgg, resolutionsCount, latestStatement, latestResolution, latestPersonalReturn, personalReturnsCount] =
     await Promise.all([
       prisma.property.findMany({
     where: { userId },
@@ -290,7 +309,14 @@ export async function buildSummary(userId: number): Promise<SummaryResponse> {
           resolutionDate: true,
           company: { select: { name: true } }
         }
-      })
+      }),
+      // Données personnelles (impôt): dernier rapport disponible pour l'utilisateur
+      prisma.personalTaxReturn.findFirst({
+        where: { shareholder: { userId } },
+        orderBy: { taxYear: 'desc' },
+        include: { slips: { select: { slipType: true } } }
+      }),
+      prisma.personalTaxReturn.count({ where: { shareholder: { userId } } })
     ]);
 
   const properties = propertyRecords as PropertyWithFinancials[];
@@ -440,7 +466,40 @@ export async function buildSummary(userId: number): Promise<SummaryResponse> {
       : null
   };
 
-  return { properties: propertySummaries, totals, corporate };
+  const personal: PersonalIncomeSummary | undefined = latestPersonalReturn
+    ? {
+        latestTaxYear: latestPersonalReturn.taxYear ?? null,
+        shareholderId: latestPersonalReturn.shareholderId ?? null,
+        taxableIncome: safeNumber(latestPersonalReturn.taxableIncome as DecimalLike),
+        employmentIncome: safeNumber(latestPersonalReturn.employmentIncome as DecimalLike),
+        businessIncome: safeNumber(latestPersonalReturn.businessIncome as DecimalLike),
+        eligibleDividends: safeNumber(latestPersonalReturn.eligibleDividends as DecimalLike),
+        nonEligibleDividends: safeNumber(latestPersonalReturn.nonEligibleDividends as DecimalLike),
+        capitalGains: safeNumber(latestPersonalReturn.capitalGains as DecimalLike),
+        deductions: safeNumber(latestPersonalReturn.deductions as DecimalLike),
+        federalTax: safeNumber(latestPersonalReturn.federalTax as DecimalLike),
+        provincialTax: safeNumber(latestPersonalReturn.provincialTax as DecimalLike),
+        balanceDue: safeNumber(latestPersonalReturn.balanceDue as DecimalLike),
+        returnsCount: personalReturnsCount,
+        slipsCount: Array.isArray((latestPersonalReturn as any).slips)
+          ? (latestPersonalReturn as any).slips.length
+          : 0,
+        slipTypeCounts: Array.isArray((latestPersonalReturn as any).slips)
+          ? Object.entries(
+              ((latestPersonalReturn as any).slips as Array<{ slipType: string }>).reduce<Record<string, number>>(
+                (acc, s) => {
+                  const key = (s.slipType || 'UNKNOWN').toUpperCase();
+                  acc[key] = (acc[key] ?? 0) + 1;
+                  return acc;
+                },
+                {}
+              )
+            ).map(([slipType, count]) => ({ slipType, count }))
+          : []
+      }
+    : undefined;
+
+  return { properties: propertySummaries, totals, corporate, personal };
 }
 
 export async function buildSummaryForExport(userId: number): Promise<SummaryExportResponse> {

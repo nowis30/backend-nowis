@@ -301,6 +301,36 @@ personalIncomesRouter.get('/returns', async (req: AuthenticatedRequest, res: Res
   }
 });
 
+// Années disponibles (retours d'impôt) pour l'utilisateur courant
+personalIncomesRouter.get('/returns/years', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const records = await prisma.personalTaxReturn.findMany({
+      where: { shareholder: { userId: req.userId } },
+      select: { taxYear: true, shareholderId: true, shareholder: { select: { displayName: true } } },
+      orderBy: [{ taxYear: 'desc' }]
+    });
+
+    const entries = records.map((r) => ({
+      taxYear: r.taxYear,
+      shareholderId: r.shareholderId,
+      shareholderName: r.shareholder?.displayName ?? 'Profil personnel'
+    }));
+
+    // Déduplication au cas où (devrait déjà être unique par [shareholderId, taxYear])
+    const seen = new Set<string>();
+    const unique = entries.filter((e) => {
+      const key = `${e.shareholderId}_${e.taxYear}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    res.json(unique);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // --- CRUD basique pour les lignes de retour et feuillets ---
 const sectionEnum = z.enum(['INCOME', 'DEDUCTION', 'CREDIT', 'CARRYFORWARD', 'PAYMENT', 'OTHER']);
 const lineCreateSchema = z.object({

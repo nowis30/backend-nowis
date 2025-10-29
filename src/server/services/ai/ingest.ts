@@ -4,6 +4,7 @@ import { env } from '../../env';
 import { extractPersonalTaxReturn, extractRentalTaxSummaries } from '../../services/tax';
 import { saveUserDocumentFile } from '../../services/documentStorage';
 import type { RentalTaxFormType } from '@prisma/client';
+import { logger } from '../../lib/logger';
 
 type IngestDomain = 'personal-income' | 'property' | 'company';
 
@@ -94,7 +95,11 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
 
   // Sauvegarde du document importé
   const saved = await saveUserDocumentFile({ buffer: req.file.buffer, userId: req.userId, originalName: req.file.filename || 'document.pdf' });
-  const createdDoc = await (prisma as any).uploadedDocument.create({
+  // Déduplication de document par checksum (même fichier importé)
+  const existingDoc = await (prisma as any).uploadedDocument.findFirst({
+    where: { userId: req.userId, domain: 'personal-income', checksum: saved.checksum }
+  });
+  const createdDoc = existingDoc ?? (await (prisma as any).uploadedDocument.create({
     data: {
       userId: req.userId,
       domain: 'personal-income',
@@ -108,7 +113,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
       taxYear: req.options?.taxYear ?? null,
       shareholderId: req.options?.shareholderId ?? null
     }
-  });
+  }));
 
   // Étape 1: extraction (mini)
   const extraction = await extractPersonalTaxReturn({
@@ -155,6 +160,30 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     if (!sh) {
       throw Object.assign(new Error('Actionnaire introuvable.'), { status: 404 });
     }
+  }
+
+  // Mise à jour du profil (identité) si le document fournit des métadonnées fiables
+  try {
+    const idt = (extraction as any)?.identity as
+      | { fullName?: string; address?: string; birthDate?: string; phone?: string; sin?: string }
+      | undefined;
+    if (idt && shareholderId) {
+      const updates: any = {};
+      if (idt.fullName && idt.fullName.trim().length >= 2) updates.displayName = idt.fullName.trim();
+      if (idt.address && idt.address.trim().length >= 5) updates.address = idt.address.trim();
+      if (idt.phone && idt.phone.trim().length >= 7) updates.contactPhone = idt.phone.trim();
+      if (idt.birthDate) {
+        const d = new Date(idt.birthDate);
+        if (!Number.isNaN(d.getTime()) && d.getFullYear() > 1900 && d.getFullYear() < 2100) {
+          updates.birthDate = d;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await prisma.shareholder.update({ where: { id: shareholderId }, data: updates as any });
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'ai:ingest: unable to update identity from extraction');
   }
 
   const createdIds: number[] = [];
@@ -337,6 +366,38 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     }
   }
 
+  // Marquage du statut d'import sur le document (historique + UI)
+  const importSummary = {
+    domain: 'personal-income',
+    shareholderId,
+    taxYear: targetYear,
+    extractedCount: items.length,
+    slipsCount: slips.length,
+    createdCount: createdIds.length,
+    duplicate: Boolean(existingDoc),
+    status:
+      existingDoc
+        ? 'DUPLICATE'
+        : items.length === 0 && slips.length === 0
+          ? 'INCOMPLETE'
+          : slips.length === 0
+            ? 'PARTIAL'
+            : 'OK'
+  } as const;
+  try {
+    await (prisma as any).uploadedDocument.update({
+      where: { id: createdDoc.id },
+      data: {
+        taxYear: targetYear ?? null,
+        shareholderId: shareholderId ?? null,
+        metadata: {
+          ...(createdDoc.metadata || {}),
+          import: importSummary
+        } as any
+      }
+    });
+  } catch {}
+
   return {
     shareholderId,
     taxYear: targetYear,
@@ -344,6 +405,8 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     createdIds,
     rentalStatements: createdRentalStatementIds,
     documentId: createdDoc.id,
-    taxReturnId: taxReturn.id
+    taxReturnId: taxReturn.id,
+    duplicate: Boolean(existingDoc),
+    status: importSummary.status
   };
 }

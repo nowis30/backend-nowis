@@ -26,6 +26,12 @@ interface BuildProfileProjectionContext {
   wealthHistory?: FamilyWealthHistoryPoint[];
   wealthOverview?: FamilyWealthOverview;
   referenceDate?: Date;
+  personal?: {
+    latestTaxYear: number | null;
+    taxableIncome: number;
+    federalTax: number;
+    provincialTax: number;
+  };
 }
 
 const DEFAULT_MONTHLY_GROWTH_RATE = 0.0025; // ~3% annualised
@@ -88,13 +94,32 @@ export async function buildProfileProjection(
     monthlyRates.push(delta.rate);
   }
 
-  const averageMonthlyChange = monthlyChanges.length
+  let averageMonthlyChange = monthlyChanges.length
     ? roundCurrency(monthlyChanges.reduce((sum, value) => sum + value, 0) / monthlyChanges.length)
     : 0;
 
-  const averageMonthlyGrowthRate = monthlyRates.length
+  let averageMonthlyGrowthRate = monthlyRates.length
     ? monthlyRates.reduce((sum, value) => sum + value, 0) / monthlyRates.length
     : DEFAULT_MONTHLY_GROWTH_RATE;
+
+  // Ajustement avec les données personnelles issues du rapport d'impôt (si disponibles)
+  if (context.personal) {
+    const estMonthlyNetIncome = (context.personal.taxableIncome - (context.personal.federalTax + context.personal.provincialTax)) / 12;
+    const estMonthlyNetSavings = roundCurrency(estMonthlyNetIncome - context.summary.totals.monthlyExpenses);
+
+    // Si on n'a pas d'historique significatif, on initialise le flux mensuel par l'épargne nette estimée
+    if (monthlyChanges.length === 0 || Math.abs(averageMonthlyChange) < 1) {
+      averageMonthlyChange = estMonthlyNetSavings;
+    } else {
+      // Sinon, pondérer légèrement (80% historique, 20% impôt) pour stabiliser
+      averageMonthlyChange = roundCurrency(0.8 * averageMonthlyChange + 0.2 * estMonthlyNetSavings);
+    }
+
+    // Si pas d'historique de taux, garder le défaut; sinon, ne pas forcer
+    if (monthlyRates.length === 0) {
+      averageMonthlyGrowthRate = averageMonthlyGrowthRate;
+    }
+  }
 
   const referenceDate = context.referenceDate
     ? new Date(context.referenceDate)
@@ -120,6 +145,16 @@ export async function buildProfileProjection(
   const notes: string[] = [];
 
   notes.push('Projection basée sur les snapshots patrimoniaux et les dépenses actuelles.');
+
+  if (context.personal) {
+    const yr = context.personal.latestTaxYear;
+    const netMonthly = (context.personal.taxableIncome - (context.personal.federalTax + context.personal.provincialTax)) / 12;
+    const netSavings = roundCurrency(netMonthly - context.summary.totals.monthlyExpenses);
+    notes.push(
+      `Ajustement selon impôt ${yr ?? ''} : revenu net mensuel estimé ${netMonthly.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })}, ` +
+      `épargne nette ${netSavings.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })}.`
+    );
+  }
 
   if (monthlyChanges.length === 0) {
     notes.push("Historique insuffisant : une croissance mensuelle neutre (0,25 %) a été appliquée.");

@@ -30,6 +30,7 @@ function serialize(d: any) {
     checksum: d.checksum ?? null,
     taxYear: d.taxYear ?? null,
     shareholderId: d.shareholderId ?? null,
+    metadata: d.metadata ?? null,
     createdAt: d.createdAt.toISOString(),
     updatedAt: d.updatedAt.toISOString()
   };

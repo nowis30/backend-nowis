@@ -212,12 +212,20 @@ export interface ExtractedPersonalTaxReturn {
   slips?: ExtractedTaxSlip[];
   confidence: number; // 0..1 overall
   rawText?: string;
+  identity?: {
+    fullName?: string;
+    address?: string;
+    birthDate?: string; // ISO or recognizable date string
+    phone?: string;
+    sin?: string; // if visible, mask except last 3 if possible
+  };
 }
 
 function buildPrompt(): string {
   return [
     'Tu es un extracteur de déclarations de revenus personnelles canadiennes (T1/TP1, feuillets T4, T5, relevés).',
     "Objectif: produire une liste normalisée de revenus personnels ET, lorsque possible, les FEUILLETS (slips) avec leurs lignes (numéros de case/code et montants).",
+    'Inclure aussi les MÉTADONNÉES D\'IDENTITÉ si visibles (nom complet, adresse postale, date de naissance, téléphone, NAS).',
     'Retourne STRICTEMENT un JSON valide conforme au schéma ci-dessous.',
     'Règles:',
     '- taxYear: année d’imposition détectée (nombre) si visible, sinon omets le champ.',
@@ -238,8 +246,15 @@ function buildPrompt(): string {
     '    - label: libellé court de la ligne',
     '    - amount: montant numérique',
     '',
+    '- identity: métadonnées s\'il y a lieu (NE DEVINE PAS):',
+    '  - fullName: nom et prénom tels qu\'affichés',
+    '  - address: adresse postale complète en une ligne',
+    '  - birthDate: date de naissance (format ISO recommandé 1990-05-12, sinon la chaîne trouvée)',
+    '  - phone: numéro de téléphone normalisé si visible',
+    '  - sin: NAS. Si complet, MASQUE les 6 premiers chiffres avec des x (ex: xxx-xxx-123). Si partiel, renvoie tel quel.',
+    '',
     'Schéma JSON exact (ne retourne rien d’autre):',
-    '{\n  "taxYear"?: number,\n  "items": {\n    "category": string,\n    "label": string,\n    "amount": number,\n    "source"?: string,\n    "slipType"?: string\n  }[],\n  "slips"?: {\n    "slipType": string,\n    "issuer"?: string,\n    "accountNumber"?: string,\n    "lines": {\n      "code"?: string,\n      "label": string,\n      "amount": number\n    }[]\n  }[],\n  "confidence": number,\n  "rawText"?: string\n}'
+    '{\n  "taxYear"?: number,\n  "items": {\n    "category": string,\n    "label": string,\n    "amount": number,\n    "source"?: string,\n    "slipType"?: string\n  }[],\n  "slips"?: {\n    "slipType": string,\n    "issuer"?: string,\n    "accountNumber"?: string,\n    "lines": {\n      "code"?: string,\n      "label": string,\n      "amount": number\n    }[]\n  }[],\n  "confidence": number,\n  "rawText"?: string,\n  "identity"?: {\n    "fullName"?: string,\n    "address"?: string,\n    "birthDate"?: string,\n    "phone"?: string,\n    "sin"?: string\n  }\n}'
   ].join('\n');
 }
 
@@ -276,7 +291,17 @@ function coerceExtraction(data: any): ExtractedPersonalTaxReturn {
   const taxYear = typeof data?.taxYear === 'number' ? data.taxYear : undefined;
   const confidence = Math.max(0, Math.min(1, Number(data?.confidence ?? 0)));
   const rawText = typeof data?.rawText === 'string' ? data.rawText : undefined;
-  return { taxYear, items, slips, confidence, rawText };
+  let identity: ExtractedPersonalTaxReturn['identity'] | undefined = undefined;
+  if (data?.identity && typeof data.identity === 'object') {
+    identity = {
+      fullName: typeof data.identity.fullName === 'string' ? data.identity.fullName.trim() : undefined,
+      address: typeof data.identity.address === 'string' ? data.identity.address.trim() : undefined,
+      birthDate: typeof data.identity.birthDate === 'string' ? data.identity.birthDate.trim() : undefined,
+      phone: typeof data.identity.phone === 'string' ? data.identity.phone.trim() : undefined,
+      sin: typeof data.identity.sin === 'string' ? data.identity.sin.trim() : undefined
+    };
+  }
+  return { taxYear, items, slips, confidence, rawText, identity };
 }
 
 export async function extractPersonalTaxReturn(params: {

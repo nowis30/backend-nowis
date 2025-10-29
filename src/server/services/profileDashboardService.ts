@@ -2,6 +2,7 @@ import { buildFamilyWealthHistory, buildFamilyWealthOverview } from './wealth/fa
 import { getProfileSummary, type ProfileSummary } from './profileSummaryService';
 import { deriveProfileInsights, type ProfileInsight } from './profileInsightsService';
 import { buildProfileProjection, type ProfileProjection } from './profileProjectionService';
+import { prisma } from '../lib/prisma';
 
 export interface ProfileDashboardPayload {
   generatedAt: string;
@@ -24,10 +25,30 @@ export async function getProfileDashboard(userId: number): Promise<ProfileDashbo
   ]);
 
   const latestHistory = history.slice(-12);
+  // Charger le dernier rapport d'impôt personnel (si présent)
+  const latestPersonal = await prisma.personalTaxReturn.findFirst({
+    where: { shareholder: { userId } },
+    orderBy: { taxYear: 'desc' },
+    select: {
+      taxYear: true,
+      taxableIncome: true,
+      federalTax: true,
+      provincialTax: true
+    }
+  });
+
   const projection = await buildProfileProjection(userId, {
     summary,
     wealthHistory: history,
-    wealthOverview: overview
+    wealthOverview: overview,
+    personal: latestPersonal
+      ? {
+          latestTaxYear: latestPersonal.taxYear ?? null,
+          taxableIncome: Number(latestPersonal.taxableIncome ?? 0),
+          federalTax: Number(latestPersonal.federalTax ?? 0),
+          provincialTax: Number(latestPersonal.provincialTax ?? 0)
+        }
+      : undefined
   });
 
   return {
