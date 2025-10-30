@@ -17,6 +17,16 @@ const envSchema = z.object({
   OPENAI_AZURE_DEPLOYMENT: z.string().optional(),
   OPENAI_API_VERSION: z.string().optional(),
   ADVISOR_PORTAL_API_KEY: z.string().optional(),
+  POST_TO_LEDGER_DEFAULT: z
+    .preprocess((value) => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        const n = value.trim().toLowerCase();
+        return ['1', 'true', 'yes', 'on'].includes(n);
+      }
+      return undefined;
+    }, z.boolean())
+    .default(false),
   ENABLE_WEALTH_SNAPSHOT_JOB: z
     .preprocess((value) => {
       if (typeof value === 'boolean') {

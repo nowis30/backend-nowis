@@ -7,7 +7,10 @@ import { prisma } from '../lib/prisma';
 import { authenticated, AuthenticatedRequest } from '../middlewares/authenticated';
 import { PERSONAL_INCOME_CATEGORIES, getPersonalIncomeSummary } from '../services/personalIncomeService';
 import { extractPersonalTaxReturn } from '../services/tax';
+import { transformPersonalIncomeItemsToJournalDrafts } from '../services/etl/transform';
+import { postJournalDrafts } from '../services/etl/load';
 import { env } from '../env';
+import { publish } from '../lib/events';
 
 const personalIncomeInclude = Prisma.validator<Prisma.PersonalIncomeInclude>()({
   shareholder: { select: { id: true, displayName: true } }
@@ -694,6 +697,12 @@ const importQuerySchema = z.object({
   autoCreate: z
     .preprocess((v) => (typeof v === 'string' ? v.toLowerCase().trim() : v), z.enum(['true', 'false']).optional())
     .optional(),
+  persistDetails: z
+    .preprocess((v) => (typeof v === 'string' ? v.toLowerCase().trim() : v), z.enum(['true', 'false']).optional())
+    .optional(),
+  postToLedger: z
+    .preprocess((v) => (typeof v === 'string' ? v.toLowerCase().trim() : v), z.enum(['true', 'false']).optional())
+    .optional(),
   shareholderId: z.coerce.number().int().positive().optional(),
   taxYear: z.coerce.number().int().min(2000).max(new Date().getFullYear() + 1).optional()
 });
@@ -728,7 +737,7 @@ personalIncomesRouter.post(
         return res.status(400).json({ error: 'Fichier requis (PDF ou image) sous le champ "file".' });
       }
 
-      const { autoCreate, shareholderId, taxYear } = importQuerySchema.parse(req.query);
+  const { autoCreate, persistDetails, postToLedger, shareholderId, taxYear } = importQuerySchema.parse(req.query);
 
       let resolvedShareholderId = shareholderId ?? null;
       if (!resolvedShareholderId) {
@@ -791,14 +800,89 @@ personalIncomesRouter.post(
             select: { id: true }
           });
           createdIds.push(created.id);
+          // Emit event for observability
+          publish({ type: 'personal_income.created', userId: req.userId!, at: new Date().toISOString(), payload: { incomeId: created.id, shareholderId: resolvedShareholderId, taxYear: targetYear, amount: item.amount } });
         }
+      }
+
+  // Optionnel: persister le retour et les feuillets détaillés
+      let createdReturnId: number | null = null;
+      const createdSlipIds: number[] = [];
+      const shouldPersist = (persistDetails ?? 'false') === 'true';
+      if (shouldPersist) {
+        // Cherche un retour existant pour [shareholderId, taxYear]
+        let existingReturn = await prisma.personalTaxReturn.findFirst({
+          where: { shareholderId: resolvedShareholderId!, taxYear: targetYear }
+        });
+        if (!existingReturn) {
+          existingReturn = await prisma.personalTaxReturn.create({
+            data: {
+              shareholderId: resolvedShareholderId!,
+              taxYear: targetYear,
+              rawExtraction: extraction as any
+            }
+          });
+        } else {
+          await prisma.personalTaxReturn.update({ where: { id: existingReturn.id }, data: { rawExtraction: extraction as any } });
+          // Nettoie les feuillets existants pour recharger proprement
+          await (prisma as any).taxSlipLine.deleteMany({ where: { slip: { returnId: existingReturn.id } } });
+          await (prisma as any).taxSlip.deleteMany({ where: { returnId: existingReturn.id } });
+        }
+        createdReturnId = existingReturn.id;
+
+        const slips = Array.isArray(extraction.slips) ? extraction.slips : [];
+        for (const s of slips) {
+          const slip = await (prisma as any).taxSlip.create({
+            data: {
+              returnId: existingReturn.id,
+              slipType: s.slipType,
+              issuer: s.issuer ?? null,
+              accountNumber: s.accountNumber ?? null,
+              metadata: undefined
+            },
+            select: { id: true }
+          });
+          createdSlipIds.push(slip.id);
+          const lines = Array.isArray(s.lines) ? s.lines : [];
+          for (const li of lines) {
+            await (prisma as any).taxSlipLine.create({
+              data: {
+                slipId: slip.id,
+                code: li.code ?? null,
+                label: li.label,
+                amount: Number(li.amount ?? 0),
+                orderIndex: 0,
+                metadata: undefined
+              }
+            });
+          }
+        }
+        publish({ type: 'tax_return.persisted', userId: req.userId!, at: new Date().toISOString(), payload: { returnId: createdReturnId, shareholderId: resolvedShareholderId, taxYear: targetYear, slipCount: slips.length } });
+      }
+
+      // Optionnel: poster dans le grand livre (double-partie) via Transform + Load
+      let postedEntryIds: number[] = [];
+      const defaultPost = !!(env as any).POST_TO_LEDGER_DEFAULT;
+      const shouldPost = (postToLedger ?? (defaultPost ? 'true' : 'false')) === 'true';
+      if (shouldPost && items.length > 0) {
+        const drafts = transformPersonalIncomeItemsToJournalDrafts({
+          userId: req.userId!,
+          taxYear: targetYear,
+          items
+        });
+        const resPost = await postJournalDrafts(drafts);
+        postedEntryIds = resPost.entryIds;
+        publish({ type: 'ledger.posted', userId: req.userId!, at: new Date().toISOString(), payload: { entryIds: postedEntryIds, count: postedEntryIds.length, taxYear: targetYear } });
       }
 
       res.json({
         shareholderId: resolvedShareholderId,
         taxYear: targetYear,
         extracted: items,
-        createdIds
+        createdIds,
+        createdReturnId,
+        createdSlipIds,
+        postedEntryIds
       });
     } catch (error) {
       next(error);

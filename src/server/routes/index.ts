@@ -31,6 +31,9 @@ import { aiRouter } from './ai';
 import { monitoringRouter } from './monitoring';
 import { documentsRouter } from './documents';
 import { mdcRouter } from './mdc';
+import { eventsRouter } from './events';
+import { whyRouter } from './why';
+import { graphRouter } from './graph';
 
 const routes = Router();
 
@@ -65,5 +68,8 @@ routes.use('/ai', aiRouter);
 routes.use('/monitoring', monitoringRouter);
 routes.use('/documents', documentsRouter);
 routes.use('/mdc', mdcRouter);
+routes.use('/events', eventsRouter);
+routes.use('/why', whyRouter);
+routes.use('/graph', graphRouter);
 
 export { routes };

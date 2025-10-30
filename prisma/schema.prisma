@@ -106,6 +106,11 @@ model User {
   Person                    Person[]
   Household                 Household[]
   LegalEntity               LegalEntity[]
+  JournalEntry              JournalEntry[]
+  Loan                      Loan[]
+  Lease                     Lease[]
+  GenericIncome             GenericIncome[]
+  GenericExpense            GenericExpense[]
 }
 
 model Property {
@@ -959,6 +964,191 @@ model InvestmentTransaction {
 
   @@index([accountId, tradeDate])
   @@index([holdingId])
+}
+
+/// Journal d'écritures (double-partie)
+model JournalEntry {
+  id              Int                 @id @default(autoincrement())
+  userId          Int
+  entryDate       DateTime            @default(now())
+  description     String?
+  reference       String?
+  // Lien optionnel vers des entités MDC (au plus un devrait être non nul)
+  personId        Int?
+  householdId     Int?
+  legalEntityId   Int?
+  companyId       Int?
+  propertyId      Int?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lines           JournalEntryLine[]
+
+  @@index([userId, entryDate])
+  @@index([personId])
+  @@index([householdId])
+  @@index([legalEntityId])
+  @@index([companyId])
+  @@index([propertyId])
+}
+
+model JournalEntryLine {
+  id           Int          @id @default(autoincrement())
+  entryId      Int
+  accountCode  String       // sera relié au référentiel du plan de comptes (#4)
+  debit        Decimal      @default(0)
+  credit       Decimal      @default(0)
+  memo         String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  entry        JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@index([accountCode])
+}
+
+/// Prêt générique (MDC)
+model Loan {
+  id               Int       @id @default(autoincrement())
+  userId           Int
+  label            String
+  principal        Decimal
+  interestRate     Decimal
+  startDate        DateTime
+  maturityDate     DateTime?
+  paymentFrequency Int       @default(12) // paiements/an
+  // Liens optionnels MDC
+  personId         Int?
+  householdId      Int?
+  legalEntityId    Int?
+  companyId        Int?
+  propertyId       Int?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([personId])
+  @@index([householdId])
+  @@index([legalEntityId])
+  @@index([companyId])
+  @@index([propertyId])
+}
+
+/// Bail (location)
+model Lease {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  propertyId   Int?
+  unitId       Int?
+  tenantName   String
+  startDate    DateTime
+  endDate      DateTime?
+  rentAmount   Decimal   @default(0)
+  frequency    String    @default("MONTHLY")
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([propertyId])
+  @@index([unitId])
+}
+
+/// Revenus génériques (MDC)
+model GenericIncome {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  label        String
+  category     String?
+  amount       Decimal   @default(0)
+  incomeDate   DateTime
+  // Liens optionnels MDC
+  personId     Int?
+  householdId  Int?
+  legalEntityId Int?
+  companyId    Int?
+  propertyId   Int?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, incomeDate])
+}
+
+/// Dépenses génériques (MDC)
+model GenericExpense {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  label        String
+  category     String?
+  amount       Decimal   @default(0)
+  expenseDate  DateTime
+  // Liens optionnels MDC
+  personId     Int?
+  householdId  Int?
+  legalEntityId Int?
+  companyId    Int?
+  propertyId   Int?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expenseDate])
+}
+
+// Mapping fiscal -> compte comptable
+model TaxLineToAccountMap {
+  id           Int      @id @default(autoincrement())
+  userId       Int?
+  form         String   // ex: T776
+  jurisdiction String?  // ex: CA, QC
+  lineCode     String   // ex: RENTAL_INCOME, PROPERTY_TAXES, INSURANCE, etc.
+  lineLabel    String?
+  accountCode  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, form, jurisdiction, lineCode])
+  @@index([form, jurisdiction])
+}
+// Référentiel: Plan de comptes simplifié
+model Account {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     // null = global (référentiel partagé), sinon spécifique à l’utilisateur
+  code        String
+  name        String
+  type        String   // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE | OTHER
+  parentCode  String?  // pour hiérarchie simple
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, code])
+  @@index([type])
+}
+
+// Référentiel: Classes CCA (Canada)
+model CCAClass {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     // null = global, sinon override spécifique
+  classCode   String   // ex: "1", "3", "8", "10", "13", etc.
+  description String?
+  rate        Decimal  @default(0) // taux CCA
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, classCode])
 }
 
 model FinancialGoal {

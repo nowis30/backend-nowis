@@ -163,13 +163,12 @@ async function main() {
   }
 
   // --- MDC: Person, Household, LegalEntity seed ---
-  const prismaAny = prisma as any;
   // Person for the primary shareholder
-  let primaryPerson = await prismaAny.person.findFirst({
+  let primaryPerson = await prisma.person.findFirst({
     where: { userId: user.id, displayName: shareholderPrimaryName }
   });
   if (!primaryPerson) {
-    primaryPerson = await prismaAny.person.create({
+    primaryPerson = await prisma.person.create({
       data: {
         userId: user.id,
         displayName: shareholderPrimaryName,
@@ -181,18 +180,18 @@ async function main() {
   }
 
   // Link Shareholder -> Person
-  if (!(primaryShareholder as any).personId) {
+  if (!primaryShareholder.personId) {
     await prisma.shareholder.update({
       where: { id: primaryShareholder.id },
-      data: { personId: primaryPerson.id } as any
+      data: { personId: primaryPerson.id }
     });
   }
 
   // Spouse/partner person for demo
   const spouseName = 'Marie Tremblay';
-  let spousePerson = await prismaAny.person.findFirst({ where: { userId: user.id, displayName: spouseName } });
+  let spousePerson = await prisma.person.findFirst({ where: { userId: user.id, displayName: spouseName } });
   if (!spousePerson) {
-    spousePerson = await prismaAny.person.create({
+    spousePerson = await prisma.person.create({
       data: {
         userId: user.id,
         displayName: spouseName,
@@ -205,9 +204,9 @@ async function main() {
 
   // Household for current tax year with members
   const currentYear = new Date().getFullYear();
-  let household = await prismaAny.household.findFirst({ where: { userId: user.id, year: currentYear } });
+  let household = await prisma.household.findFirst({ where: { userId: user.id, year: currentYear } });
   if (!household) {
-    household = await prismaAny.household.create({
+    household = await prisma.household.create({
       data: {
         userId: user.id,
         year: currentYear,
@@ -222,11 +221,11 @@ async function main() {
   }
 
   // LegalEntity mapped to the demo company (generic link)
-  const existingEntity = await prismaAny.legalEntity.findFirst({
+  const existingEntity = await prisma.legalEntity.findFirst({
     where: { userId: user.id, companyId: company.id }
   });
   if (!existingEntity) {
-    await prismaAny.legalEntity.create({
+    await prisma.legalEntity.create({
       data: {
         userId: user.id,
         name: company.name,
@@ -686,6 +685,65 @@ async function main() {
   });
 
   console.log(`Utilisateur seedé : ${user.email}`);
+
+  // --- Seeds référentiels: plan de comptes (global) ---
+  const baseAccounts: Array<{ code: string; name: string; type: string; parentCode?: string | null }> = [
+    { code: '1000', name: 'Actif', type: 'ASSET' },
+    { code: '1100', name: 'Trésorerie', type: 'ASSET', parentCode: '1000' },
+    { code: '1200', name: 'Comptes à recevoir', type: 'ASSET', parentCode: '1000' },
+    { code: '2000', name: 'Passif', type: 'LIABILITY' },
+    { code: '2100', name: 'Emprunts', type: 'LIABILITY', parentCode: '2000' },
+    { code: '2200', name: 'Comptes à payer', type: 'LIABILITY', parentCode: '2000' },
+    { code: '3000', name: 'Capitaux propres', type: 'EQUITY' },
+    { code: '3100', name: 'Capital-actions', type: 'EQUITY', parentCode: '3000' },
+    { code: '3200', name: 'Bénéfices non répartis', type: 'EQUITY', parentCode: '3000' },
+    { code: '4000', name: 'Produits', type: 'REVENUE' },
+    { code: '4100', name: 'Revenus de loyers', type: 'REVENUE', parentCode: '4000' },
+    { code: '4200', name: 'Autres revenus', type: 'REVENUE', parentCode: '4000' },
+    { code: '5000', name: 'Charges', type: 'EXPENSE' },
+    { code: '5100', name: 'Entretien', type: 'EXPENSE', parentCode: '5000' },
+    { code: '5200', name: 'Assurances', type: 'EXPENSE', parentCode: '5000' },
+    { code: '5300', name: 'Intérêts', type: 'EXPENSE', parentCode: '5000' }
+  ];
+
+  for (const acc of baseAccounts) {
+    const exists = await prisma.account.findFirst({ where: { userId: null, code: acc.code } });
+    if (!exists) {
+      await prisma.account.create({
+        data: {
+          userId: null,
+          code: acc.code,
+          name: acc.name,
+          type: acc.type,
+          parentCode: acc.parentCode ?? null,
+          isActive: true
+        }
+      });
+    }
+  }
+
+  // --- Seeds référentiels: classes CCA (global) ---
+  const ccaClasses: Array<{ classCode: string; description: string; rate: number }> = [
+    { classCode: '1', description: 'Bâtiments (50% déduction additionnelle initiale exclue, taux de base)', rate: 0.04 },
+    { classCode: '3', description: 'Bâtiments (acquis avant 1988)', rate: 0.05 },
+    { classCode: '8', description: 'Mobilier et équipements divers', rate: 0.20 },
+    { classCode: '10', description: 'Véhicules automobiles et équipements', rate: 0.30 },
+    { classCode: '13', description: 'Améliorations locatives (amortissement linéaire)', rate: 0.00 }
+  ];
+
+  for (const c of ccaClasses) {
+    const exists = await prisma.cCAClass.findFirst({ where: { userId: null, classCode: c.classCode } });
+    if (!exists) {
+      await prisma.cCAClass.create({
+        data: {
+          userId: null,
+          classCode: c.classCode,
+          description: c.description,
+          rate: c.rate
+        }
+      });
+    }
+  }
 }
 
 main()
