@@ -58,7 +58,7 @@ function calculateCca(depreciation, netIncomeBeforeCca) {
     return Math.min(ccaMax, netIncomeBeforeCca);
 }
 async function buildSummary(userId) {
-    const [propertyRecords, companiesCount, shareholdersCount, shareClassesCount, shareTransactionAgg, statementAgg, resolutionsCount, latestStatement, latestResolution] = await Promise.all([
+    const [propertyRecords, companiesCount, shareholdersCount, shareClassesCount, shareTransactionAgg, statementAgg, resolutionsCount, latestStatement, latestResolution, latestPersonalReturn, personalReturnsCount] = await Promise.all([
         prisma_1.prisma.property.findMany({
             where: { userId },
             include: {
@@ -115,7 +115,14 @@ async function buildSummary(userId) {
                 resolutionDate: true,
                 company: { select: { name: true } }
             }
-        })
+        }),
+        // Données personnelles (impôt): dernier rapport disponible pour l'utilisateur
+        prisma_1.prisma.personalTaxReturn.findFirst({
+            where: { shareholder: { userId } },
+            orderBy: { taxYear: 'desc' },
+            include: { slips: { select: { slipType: true } } }
+        }),
+        prisma_1.prisma.personalTaxReturn.count({ where: { shareholder: { userId } } })
     ]);
     const properties = propertyRecords;
     let weightedRateNumerator = 0;
@@ -245,7 +252,34 @@ async function buildSummary(userId) {
             }
             : null
     };
-    return { properties: propertySummaries, totals, corporate };
+    const personal = latestPersonalReturn
+        ? {
+            latestTaxYear: latestPersonalReturn.taxYear ?? null,
+            shareholderId: latestPersonalReturn.shareholderId ?? null,
+            taxableIncome: safeNumber(latestPersonalReturn.taxableIncome),
+            employmentIncome: safeNumber(latestPersonalReturn.employmentIncome),
+            businessIncome: safeNumber(latestPersonalReturn.businessIncome),
+            eligibleDividends: safeNumber(latestPersonalReturn.eligibleDividends),
+            nonEligibleDividends: safeNumber(latestPersonalReturn.nonEligibleDividends),
+            capitalGains: safeNumber(latestPersonalReturn.capitalGains),
+            deductions: safeNumber(latestPersonalReturn.deductions),
+            federalTax: safeNumber(latestPersonalReturn.federalTax),
+            provincialTax: safeNumber(latestPersonalReturn.provincialTax),
+            balanceDue: safeNumber(latestPersonalReturn.balanceDue),
+            returnsCount: personalReturnsCount,
+            slipsCount: Array.isArray(latestPersonalReturn.slips)
+                ? latestPersonalReturn.slips.length
+                : 0,
+            slipTypeCounts: Array.isArray(latestPersonalReturn.slips)
+                ? Object.entries(latestPersonalReturn.slips.reduce((acc, s) => {
+                    const key = (s.slipType || 'UNKNOWN').toUpperCase();
+                    acc[key] = (acc[key] ?? 0) + 1;
+                    return acc;
+                }, {})).map(([slipType, count]) => ({ slipType, count }))
+                : []
+        }
+        : undefined;
+    return { properties: propertySummaries, totals, corporate, personal };
 }
 async function buildSummaryForExport(userId) {
     const [summary, companyRecords] = await Promise.all([

@@ -162,6 +162,81 @@ async function main() {
     });
   }
 
+  // --- MDC: Person, Household, LegalEntity seed ---
+  const prismaAny = prisma as any;
+  // Person for the primary shareholder
+  let primaryPerson = await prismaAny.person.findFirst({
+    where: { userId: user.id, displayName: shareholderPrimaryName }
+  });
+  if (!primaryPerson) {
+    primaryPerson = await prismaAny.person.create({
+      data: {
+        userId: user.id,
+        displayName: shareholderPrimaryName,
+        birthDate: new Date('1982-06-15'),
+        gender: 'M',
+        address: '123 Rue Principale, Montréal'
+      }
+    });
+  }
+
+  // Link Shareholder -> Person
+  if (!(primaryShareholder as any).personId) {
+    await prisma.shareholder.update({
+      where: { id: primaryShareholder.id },
+      data: { personId: primaryPerson.id } as any
+    });
+  }
+
+  // Spouse/partner person for demo
+  const spouseName = 'Marie Tremblay';
+  let spousePerson = await prismaAny.person.findFirst({ where: { userId: user.id, displayName: spouseName } });
+  if (!spousePerson) {
+    spousePerson = await prismaAny.person.create({
+      data: {
+        userId: user.id,
+        displayName: spouseName,
+        birthDate: new Date('1984-09-02'),
+        gender: 'F',
+        address: '123 Rue Principale, Montréal'
+      }
+    });
+  }
+
+  // Household for current tax year with members
+  const currentYear = new Date().getFullYear();
+  let household = await prismaAny.household.findFirst({ where: { userId: user.id, year: currentYear } });
+  if (!household) {
+    household = await prismaAny.household.create({
+      data: {
+        userId: user.id,
+        year: currentYear,
+        members: {
+          create: [
+            { personId: primaryPerson.id, relationship: 'PRIMARY', isPrimary: true },
+            { personId: spousePerson.id, relationship: 'SPOUSE', isPrimary: false }
+          ]
+        }
+      }
+    });
+  }
+
+  // LegalEntity mapped to the demo company (generic link)
+  const existingEntity = await prismaAny.legalEntity.findFirst({
+    where: { userId: user.id, companyId: company.id }
+  });
+  if (!existingEntity) {
+    await prismaAny.legalEntity.create({
+      data: {
+        userId: user.id,
+        name: company.name,
+        type: 'inc',
+        jurisdiction: 'QC',
+        companyId: company.id
+      }
+    });
+  }
+
   const holdingShareholderName = 'Gestion Tremblay Inc.';
   let holdingShareholder = await prisma.shareholder.findFirst({
     where: {

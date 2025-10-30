@@ -7,158 +7,232 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id           Int         @id @default(autoincrement())
-  email        String      @unique
-  passwordHash String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  properties   Property[]
-  companies    Company[]
+/// Modèle de Données Canonique (base)
+model Person {
+  id          Int       @id @default(autoincrement())
+  userId      Int?
+  displayName String
+  birthDate   DateTime?
+  sinHash     String?
+  gender      String?
+  address     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user         User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  households   HouseholdMember[]
+  // Lien optionnel vers un actionnaire existant (1-1)
   shareholders Shareholder[]
-  uploadedDocuments UploadedDocument[]
-  roles        UserRole[]
+
+  @@index([userId])
+}
+
+model Household {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  year      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members HouseholdMember[]
+
+  @@index([userId, year])
+}
+
+model HouseholdMember {
+  id           Int      @id @default(autoincrement())
+  householdId  Int
+  personId     Int
+  relationship String?
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, personId])
+  @@index([personId])
+}
+
+// Entité légale générique (correspond généralement à Company)
+model LegalEntity {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  name         String
+  type         String // inc|perso|partnership|trust
+  jurisdiction String?
+  companyId    Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId])
+  @@index([userId])
+}
+
+model User {
+  id                        Int                        @id @default(autoincrement())
+  email                     String                     @unique
+  passwordHash              String
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  properties                Property[]
+  companies                 Company[]
+  shareholders              Shareholder[]
+  uploadedDocuments         UploadedDocument[]
+  roles                     UserRole[]
   leveragedBuybackScenarios LeveragedBuybackScenario[]
-  rentalTaxStatements      RentalTaxStatement[]
-  valuationSnapshots       ValuationSnapshot[]
-  personalAssets           PersonalAsset[]
-  personalLiabilities      PersonalLiability[]
-  personalExpenses         PersonalExpense[]
-  familyTrusts             FamilyTrust[]
-  familyWealthSnapshots    FamilyWealthSnapshot[]
-  familyWealthScenarios    FamilyWealthScenario[]
-  freezeAssets             FreezeAsset[]
-  freezeScenarios          FreezeScenario[]
-  freezeSimulations        FreezeSimulation[]
-  investmentAccounts       InvestmentAccount[]
-  financialGoals           FinancialGoal[]
-  leverageScenarios        LeverageScenario[]
-  advisorConversations     AdvisorConversation[]
-  alertRules               AlertRule[]
-  alertEvents              AlertEvent[]
+  rentalTaxStatements       RentalTaxStatement[]
+  valuationSnapshots        ValuationSnapshot[]
+  personalAssets            PersonalAsset[]
+  personalLiabilities       PersonalLiability[]
+  personalExpenses          PersonalExpense[]
+  familyTrusts              FamilyTrust[]
+  familyWealthSnapshots     FamilyWealthSnapshot[]
+  familyWealthScenarios     FamilyWealthScenario[]
+  freezeAssets              FreezeAsset[]
+  freezeScenarios           FreezeScenario[]
+  freezeSimulations         FreezeSimulation[]
+  investmentAccounts        InvestmentAccount[]
+  financialGoals            FinancialGoal[]
+  leverageScenarios         LeverageScenario[]
+  advisorConversations      AdvisorConversation[]
+  alertRules                AlertRule[]
+  alertEvents               AlertEvent[]
+  Person                    Person[]
+  Household                 Household[]
+  LegalEntity               LegalEntity[]
 }
 
 model Property {
-  id               Int                  @id @default(autoincrement())
-  userId           Int
-  companyId        Int?
-  name             String
-  address          String?
-  acquisitionDate  DateTime?
-  purchasePrice    Decimal?
-  currentValue     Decimal?
-  notes            String?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  user             User                  @relation(fields: [userId], references: [id])
-  company          Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  units            PropertyUnit[]
-  mortgages        Mortgage[]
-  revenues         Revenue[]
-  expenses         Expense[]
-  invoices         Invoice[]
-  depreciationInfo DepreciationSetting?
-  attachments      Attachment[]
-  rentalTaxStatements RentalTaxStatement[]
-  freezeAssets       FreezeAsset[]
-  coOwners           PropertyCoOwner[]
-  collateralForLeverageScenarios LeverageScenario[] @relation("CollateralProperty")
-  targetForLeverageScenarios     LeverageScenario[] @relation("TargetProperty")
+  id                             Int                  @id @default(autoincrement())
+  userId                         Int
+  companyId                      Int?
+  name                           String
+  address                        String?
+  acquisitionDate                DateTime?
+  purchasePrice                  Decimal?
+  currentValue                   Decimal?
+  notes                          String?
+  createdAt                      DateTime             @default(now())
+  updatedAt                      DateTime             @updatedAt
+  user                           User                 @relation(fields: [userId], references: [id])
+  company                        Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  units                          PropertyUnit[]
+  mortgages                      Mortgage[]
+  revenues                       Revenue[]
+  expenses                       Expense[]
+  invoices                       Invoice[]
+  depreciationInfo               DepreciationSetting?
+  attachments                    Attachment[]
+  rentalTaxStatements            RentalTaxStatement[]
+  freezeAssets                   FreezeAsset[]
+  coOwners                       PropertyCoOwner[]
+  collateralForLeverageScenarios LeverageScenario[]   @relation("CollateralProperty")
+  targetForLeverageScenarios     LeverageScenario[]   @relation("TargetProperty")
 }
 
 model Company {
-  id            Int                     @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   userId        Int
   name          String
   neq           String?
   fiscalYearEnd DateTime?
   province      String?
   notes         String?
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  properties         Property[]
-  shareholderLinks   CompanyShareholder[]
-  shareClasses       ShareClass[]
-  shareTransactions  ShareTransaction[]
-  statements         CorporateStatement[]
-  resolutions        CorporateResolution[]
-  userRoles          UserRole[]
-  dividends          DividendDeclaration[]
-  returnsOfCapital   ReturnOfCapitalRecord[]
-  shareholderLoans   ShareholderLoan[]
-  corporateTaxReturns CorporateTaxReturn[]
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties                Property[]
+  shareholderLinks          CompanyShareholder[]
+  shareClasses              ShareClass[]
+  shareTransactions         ShareTransaction[]
+  statements                CorporateStatement[]
+  resolutions               CorporateResolution[]
+  userRoles                 UserRole[]
+  dividends                 DividendDeclaration[]
+  returnsOfCapital          ReturnOfCapitalRecord[]
+  shareholderLoans          ShareholderLoan[]
+  corporateTaxReturns       CorporateTaxReturn[]
   leveragedBuybackScenarios LeveragedBuybackScenario[]
-  valuationSnapshots       ValuationSnapshot[]
-  freezeAssets             FreezeAsset[]
-  leverageScenarios        LeverageScenario[]
+  valuationSnapshots        ValuationSnapshot[]
+  freezeAssets              FreezeAsset[]
+  leverageScenarios         LeverageScenario[]
+  LegalEntity               LegalEntity?
 }
 
 model Shareholder {
-  id            Int                  @id @default(autoincrement())
-  userId        Int
-  type          String               @default("PERSON")
-  displayName   String
+  id                                     Int       @id @default(autoincrement())
+  userId                                 Int
+  type                                   String    @default("PERSON")
+  displayName                            String
   // Champs démographiques de base pour le profil personnel
-  address       String?
-  birthDate     DateTime?
-  gender        String?
-  contactEmail  String?
-  contactPhone  String?
-  notes         String?
+  address                                String?
+  birthDate                              DateTime?
+  gender                                 String?
+  contactEmail                           String?
+  contactPhone                           String?
+  notes                                  String?
   lifetimeCapitalGainsExemptionRemaining Decimal?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  // Lien optionnel vers Person (MDC)
+  personId                               Int?
+  createdAt                              DateTime  @default(now())
+  updatedAt                              DateTime  @updatedAt
 
-  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  companies         CompanyShareholder[]
-  shareTransactions ShareTransaction[]
-  dividends         DividendDeclaration[]
-  returnsOfCapital  ReturnOfCapitalRecord[]
-  shareholderLoans  ShareholderLoan[]
-  personalTaxReturns PersonalTaxReturn[]
-  personalIncomes   PersonalIncome[]
-  uploadedDocuments UploadedDocument[]
-  familyTrust       FamilyTrust?
+  user                     User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person                   Person?                  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  companies                CompanyShareholder[]
+  shareTransactions        ShareTransaction[]
+  dividends                DividendDeclaration[]
+  returnsOfCapital         ReturnOfCapitalRecord[]
+  shareholderLoans         ShareholderLoan[]
+  personalTaxReturns       PersonalTaxReturn[]
+  personalIncomes          PersonalIncome[]
+  uploadedDocuments        UploadedDocument[]
+  familyTrust              FamilyTrust?
   familyTrustBeneficiaries FamilyTrustBeneficiary[]
-  propertyCoOwnerships PropertyCoOwner[]
+  propertyCoOwnerships     PropertyCoOwner[]
+
+  @@index([personId])
 }
 
 model CompanyShareholder {
-  id             Int          @id @default(autoincrement())
-  companyId      Int
-  shareholderId  Int
-  role           String?
-  votingPercent  Decimal?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  shareholderId Int
+  role          String?
+  votingPercent Decimal?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
-
 }
 
 model ShareClass {
-  id                     Int                 @id @default(autoincrement())
-  companyId              Int
-  code                   String
-  description            String?
-  hasVotingRights        Boolean             @default(true)
-  participatesInGrowth   Boolean             @default(true)
-  dividendPolicy         String?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  id                   Int      @id @default(autoincrement())
+  companyId            Int
+  code                 String
+  description          String?
+  hasVotingRights      Boolean  @default(true)
+  participatesInGrowth Boolean  @default(true)
+  dividendPolicy       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  transactions   ShareTransaction[]
-  dividends      DividendDeclaration[]
+  company          Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions     ShareTransaction[]
+  dividends        DividendDeclaration[]
   returnsOfCapital ReturnOfCapitalRecord[]
-
 }
 
 model ShareTransaction {
-  id                Int                   @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   companyId         Int
   shareClassId      Int
   shareholderId     Int
@@ -169,8 +243,8 @@ model ShareTransaction {
   considerationPaid Decimal?
   fairMarketValue   Decimal?
   notes             String?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   shareClass  ShareClass  @relation(fields: [shareClassId], references: [id], onDelete: Cascade)
@@ -178,50 +252,50 @@ model ShareTransaction {
 }
 
 model CorporateStatement {
-  id               Int                    @id @default(autoincrement())
+  id               Int      @id @default(autoincrement())
   companyId        Int
   statementType    String
   periodStart      DateTime
   periodEnd        DateTime
-  isAudited        Boolean                @default(false)
-  totalAssets      Decimal                @default(0)
-  totalLiabilities Decimal                @default(0)
-  totalEquity      Decimal                @default(0)
-  totalRevenue     Decimal                @default(0)
-  totalExpenses    Decimal                @default(0)
-  netIncome        Decimal                @default(0)
+  isAudited        Boolean  @default(false)
+  totalAssets      Decimal  @default(0)
+  totalLiabilities Decimal  @default(0)
+  totalEquity      Decimal  @default(0)
+  totalRevenue     Decimal  @default(0)
+  totalExpenses    Decimal  @default(0)
+  netIncome        Decimal  @default(0)
   metadata         String?
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  company Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   lines   CorporateStatementLine[]
 }
 
 model CorporateStatementLine {
-  id          Int                   @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   statementId Int
   category    String
   label       String
   amount      Decimal
-  orderIndex  Int                   @default(0)
+  orderIndex  Int      @default(0)
   metadata    String?
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   statement CorporateStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
 }
 
 model CorporateResolution {
-  id             Int            @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   companyId      Int
   type           String
   title          String
   resolutionDate DateTime
   body           String?
   metadata       String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -232,7 +306,7 @@ enum DividendType {
 }
 
 model DividendDeclaration {
-  id               Int            @id @default(autoincrement())
+  id               Int          @id @default(autoincrement())
   companyId        Int
   shareholderId    Int
   shareClassId     Int?
@@ -241,13 +315,13 @@ model DividendDeclaration {
   paymentDate      DateTime?
   amount           Decimal
   dividendType     DividendType
-  grossUpRate      Decimal         @default(0)
-  grossedAmount    Decimal         @default(0)
-  federalCredit    Decimal         @default(0)
-  provincialCredit Decimal         @default(0)
+  grossUpRate      Decimal      @default(0)
+  grossedAmount    Decimal      @default(0)
+  federalCredit    Decimal      @default(0)
+  provincialCredit Decimal      @default(0)
   notes            String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
@@ -255,7 +329,7 @@ model DividendDeclaration {
 }
 
 model ReturnOfCapitalRecord {
-  id              Int            @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   companyId       Int
   shareholderId   Int
   shareClassId    Int?
@@ -264,8 +338,8 @@ model ReturnOfCapitalRecord {
   previousAcb     Decimal?
   newAcb          Decimal?
   notes           String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
@@ -273,54 +347,54 @@ model ReturnOfCapitalRecord {
 }
 
 model ShareholderLoan {
-  id             Int                         @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   companyId      Int
   shareholderId  Int
   issuedDate     DateTime
   principal      Decimal
   interestRate   Decimal
-  interestMethod String                     @default("SIMPLE")
+  interestMethod String    @default("SIMPLE")
   dueDate        DateTime?
   notes          String?
-  createdAt      DateTime                    @default(now())
-  updatedAt      DateTime                    @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  company     Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shareholder Shareholder              @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
   payments    ShareholderLoanPayment[]
 }
 
 model ShareholderLoanPayment {
-  id           Int             @id @default(autoincrement())
-  loanId       Int
-  paymentDate  DateTime
-  principalPaid Decimal        @default(0)
-  interestPaid Decimal         @default(0)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id            Int      @id @default(autoincrement())
+  loanId        Int
+  paymentDate   DateTime
+  principalPaid Decimal  @default(0)
+  interestPaid  Decimal  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   loan ShareholderLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
 }
 
 model CorporateTaxReturn {
-  id                    Int       @id @default(autoincrement())
-  companyId             Int
-  fiscalYearEnd         DateTime
-  netIncome             Decimal   @default(0)
-  taxableIncome         Decimal   @default(0)
+  id                     Int      @id @default(autoincrement())
+  companyId              Int
+  fiscalYearEnd          DateTime
+  netIncome              Decimal  @default(0)
+  taxableIncome          Decimal  @default(0)
   smallBusinessDeduction Decimal  @default(0)
-  federalTax            Decimal   @default(0)
-  provincialTax         Decimal   @default(0)
-  rdtohOpening          Decimal   @default(0)
-  rdtohClosing          Decimal   @default(0)
-  gripOpening           Decimal   @default(0)
-  gripClosing           Decimal   @default(0)
-  cdaOpening            Decimal   @default(0)
-  cdaClosing            Decimal   @default(0)
-  refunds               Decimal   @default(0)
-  notes                 String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  federalTax             Decimal  @default(0)
+  provincialTax          Decimal  @default(0)
+  rdtohOpening           Decimal  @default(0)
+  rdtohClosing           Decimal  @default(0)
+  gripOpening            Decimal  @default(0)
+  gripClosing            Decimal  @default(0)
+  cdaOpening             Decimal  @default(0)
+  cdaClosing             Decimal  @default(0)
+  refunds                Decimal  @default(0)
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -328,29 +402,29 @@ model CorporateTaxReturn {
 }
 
 model PersonalTaxReturn {
-  id                       Int       @id @default(autoincrement())
-  shareholderId            Int
-  taxYear                  Int
-  employmentIncome         Decimal   @default(0)
-  businessIncome           Decimal   @default(0)
-  eligibleDividends        Decimal   @default(0)
-  nonEligibleDividends     Decimal   @default(0)
-  capitalGains             Decimal   @default(0)
-  deductions               Decimal   @default(0)
-  otherCredits             Decimal   @default(0)
-  taxableIncome            Decimal   @default(0)
-  federalTax               Decimal   @default(0)
-  provincialTax            Decimal   @default(0)
-  totalCredits             Decimal   @default(0)
-  balanceDue               Decimal   @default(0)
+  id                   Int      @id @default(autoincrement())
+  shareholderId        Int
+  taxYear              Int
+  employmentIncome     Decimal  @default(0)
+  businessIncome       Decimal  @default(0)
+  eligibleDividends    Decimal  @default(0)
+  nonEligibleDividends Decimal  @default(0)
+  capitalGains         Decimal  @default(0)
+  deductions           Decimal  @default(0)
+  otherCredits         Decimal  @default(0)
+  taxableIncome        Decimal  @default(0)
+  federalTax           Decimal  @default(0)
+  provincialTax        Decimal  @default(0)
+  totalCredits         Decimal  @default(0)
+  balanceDue           Decimal  @default(0)
   // Lien optionnel avec le document importé (PDF) et capture de l'extraction brute
-  documentId               Int?
-  rawExtraction            Json?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  documentId           Int?
+  rawExtraction        Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
-  document    UploadedDocument? @relation("PersonalTaxReturnDocument", fields: [documentId], references: [id], onDelete: SetNull)
+  shareholder Shareholder             @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
+  document    UploadedDocument?       @relation("PersonalTaxReturnDocument", fields: [documentId], references: [id], onDelete: SetNull)
   lines       PersonalTaxReturnLine[]
   slips       TaxSlip[]
 
@@ -384,15 +458,15 @@ model PersonalTaxReturnLine {
 }
 
 model TaxSlip {
-  id            Int       @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   returnId      Int
-  slipType      String    // ex: T4, T5, T3, T4A, T5008, RL-1, etc.
+  slipType      String // ex: T4, T5, T3, T4A, T5008, RL-1, etc.
   issuer        String?
   accountNumber String?
   documentId    Int?
   metadata      Json?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   taxReturn PersonalTaxReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
   document  UploadedDocument? @relation("TaxSlipDocument", fields: [documentId], references: [id], onDelete: SetNull)
@@ -402,15 +476,15 @@ model TaxSlip {
 }
 
 model TaxSlipLine {
-  id        Int      @id @default(autoincrement())
-  slipId    Int
-  code      String?
-  label     String
-  amount    Decimal  @default(0)
-  orderIndex Int     @default(0)
-  metadata  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  slipId     Int
+  code       String?
+  label      String
+  amount     Decimal  @default(0)
+  orderIndex Int      @default(0)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   slip TaxSlip @relation(fields: [slipId], references: [id], onDelete: Cascade)
 
@@ -418,16 +492,16 @@ model TaxSlipLine {
 }
 
 model PersonalIncome {
-  id            Int       @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   shareholderId Int
   taxYear       Int
   category      String
   label         String
   source        String?
   slipType      String?
-  amount        Decimal   @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  amount        Decimal  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
 
@@ -435,18 +509,18 @@ model PersonalIncome {
 }
 
 model PersonalAsset {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  label       String
-  category    String?
-  ownerType   String    @default("PERSONAL")
-  ownerNotes  String?
-  valuation   Decimal   @default(0)
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  label         String
+  category      String?
+  ownerType     String   @default("PERSONAL")
+  ownerNotes    String?
+  valuation     Decimal  @default(0)
   valuationDate DateTime
-  liquidityTag String?
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  liquidityTag  String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -454,17 +528,17 @@ model PersonalAsset {
 }
 
 model PersonalLiability {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  label       String
-  category    String?
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  label        String
+  category     String?
   counterparty String?
-  balance     Decimal   @default(0)
-  interestRate Decimal? 
+  balance      Decimal   @default(0)
+  interestRate Decimal?
   maturityDate DateTime?
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -472,18 +546,18 @@ model PersonalLiability {
 }
 
 model PersonalExpense {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  label       String
-  category    String?
-  amount      Decimal   @default(0)
-  frequency   String    @default("MONTHLY")
-  startDate   DateTime?
-  endDate     DateTime?
-  essential   Boolean   @default(false)
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  label     String
+  category  String?
+  amount    Decimal   @default(0)
+  frequency String    @default("MONTHLY")
+  startDate DateTime?
+  endDate   DateTime?
+  essential Boolean   @default(false)
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -491,34 +565,34 @@ model PersonalExpense {
 }
 
 model FamilyTrust {
-  id             Int       @id @default(autoincrement())
-  userId         Int
-  shareholderId  Int?      @unique
-  name           String
-  establishedOn  DateTime?
-  netAssetValue  Decimal   @default(0)
-  mandate        String?
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  shareholderId Int?      @unique
+  name          String
+  establishedOn DateTime?
+  netAssetValue Decimal   @default(0)
+  mandate       String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
-  fiduciaries FamilyTrustFiduciary[]
-  beneficiaries FamilyTrustBeneficiary[]
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareholder     Shareholder?             @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+  fiduciaries     FamilyTrustFiduciary[]
+  beneficiaries   FamilyTrustBeneficiary[]
   freezeScenarios FreezeScenario[]
 
   @@index([userId])
 }
 
 model FamilyTrustFiduciary {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   trustId   Int
   fullName  String
   role      String?
   email     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   trust FamilyTrust @relation(fields: [trustId], references: [id], onDelete: Cascade)
 
@@ -526,20 +600,20 @@ model FamilyTrustFiduciary {
 }
 
 model FamilyTrustBeneficiary {
-  id         Int        @id @default(autoincrement())
-  trustId    Int
-  shareholderId Int?
-  displayName String
-  relationship String?
-  birthDate   DateTime?
-  preferredAllocationPercent Decimal?
+  id                                   Int       @id @default(autoincrement())
+  trustId                              Int
+  shareholderId                        Int?
+  displayName                          String
+  relationship                         String?
+  birthDate                            DateTime?
+  preferredAllocationPercent           Decimal?
   lifetimeCapitalGainsExemptionClaimed Decimal?
-  notes       String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  notes                                String?
+  createdAt                            DateTime  @default(now())
+  updatedAt                            DateTime  @updatedAt
 
-  trust       FamilyTrust @relation(fields: [trustId], references: [id], onDelete: Cascade)
-  shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+  trust             FamilyTrust                         @relation(fields: [trustId], references: [id], onDelete: Cascade)
+  shareholder       Shareholder?                        @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
   simulationResults FreezeSimulationBeneficiaryResult[]
 
   @@index([trustId])
@@ -550,19 +624,19 @@ model FamilyWealthSnapshot {
   id                   Int      @id @default(autoincrement())
   userId               Int
   snapshotDate         DateTime
-  totalAssets          Decimal   @default(0)
-  totalLiabilities     Decimal   @default(0)
-  netWorth             Decimal   @default(0)
-  propertyValue        Decimal   @default(0)
-  companyValue         Decimal   @default(0)
-  trustValue           Decimal   @default(0)
-  personalAssetsValue  Decimal   @default(0)
-  liquidAssetsValue    Decimal   @default(0)
-  personalDebtValue    Decimal   @default(0)
-  shareholderLoanValue Decimal   @default(0)
+  totalAssets          Decimal  @default(0)
+  totalLiabilities     Decimal  @default(0)
+  netWorth             Decimal  @default(0)
+  propertyValue        Decimal  @default(0)
+  companyValue         Decimal  @default(0)
+  trustValue           Decimal  @default(0)
+  personalAssetsValue  Decimal  @default(0)
+  liquidAssetsValue    Decimal  @default(0)
+  personalDebtValue    Decimal  @default(0)
+  shareholderLoanValue Decimal  @default(0)
   metadata             Json?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -571,19 +645,18 @@ model FamilyWealthSnapshot {
 }
 
 model FamilyWealthScenario {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  label       String
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  label        String
   scenarioType String   @default("BASELINE")
-  parameters  Json?
-  results     Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  parameters   Json?
+  results      Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, scenarioType])
-
 }
 
 enum LeverageSourceType {
@@ -602,27 +675,27 @@ enum LeverageInvestmentVehicle {
 }
 
 model LeverageScenario {
-  id                  Int                        @id @default(autoincrement())
-  userId              Int
-  companyId           Int?
-  label               String
-  sourceType          LeverageSourceType
-  principal           Decimal                     @db.Decimal(18, 2)
-  rateAnnual          Decimal                     @db.Decimal(5, 4)
-  termMonths          Int
-  amortizationMonths  Int?
-  startDate           DateTime
-  interestDeductible  Boolean                     @default(false)
-  investmentVehicle   LeverageInvestmentVehicle
-  expectedReturnAnnual Decimal                    @db.Decimal(5, 4)
-  expectedVolatility  Decimal?                    @db.Decimal(5, 4)
-  planHorizonYears    Int                         @default(10)
-  notes               String?
-  createdAt           DateTime                    @default(now())
-  updatedAt           DateTime                    @updatedAt
+  id                   Int                       @id @default(autoincrement())
+  userId               Int
+  companyId            Int?
+  label                String
+  sourceType           LeverageSourceType
+  principal            Decimal                   @db.Decimal(18, 2)
+  rateAnnual           Decimal                   @db.Decimal(5, 4)
+  termMonths           Int
+  amortizationMonths   Int?
+  startDate            DateTime
+  interestDeductible   Boolean                   @default(false)
+  investmentVehicle    LeverageInvestmentVehicle
+  expectedReturnAnnual Decimal                   @db.Decimal(5, 4)
+  expectedVolatility   Decimal?                  @db.Decimal(5, 4)
+  planHorizonYears     Int                       @default(10)
+  notes                String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company              Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
   collateralPropertyId Int?
   targetPropertyId     Int?
   collateralProperty   Property? @relation("CollateralProperty", fields: [collateralPropertyId], references: [id], onDelete: SetNull)
@@ -659,7 +732,7 @@ model AdvisorConversation {
   createdAt DateTime                  @default(now())
   updatedAt DateTime                  @updatedAt
 
-  user  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   steps AdvisorConversationStep[]
 
   @@index([userId])
@@ -667,7 +740,7 @@ model AdvisorConversation {
 }
 
 model AdvisorConversationStep {
-  id             Int                    @id @default(autoincrement())
+  id             Int                     @id @default(autoincrement())
   conversationId Int
   role           AdvisorConversationRole
   message        String
@@ -675,7 +748,7 @@ model AdvisorConversationStep {
   updates        Json?
   nextQuestion   Json?
   completed      Boolean?
-  createdAt      DateTime               @default(now())
+  createdAt      DateTime                @default(now())
 
   conversation AdvisorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -683,24 +756,24 @@ model AdvisorConversationStep {
 }
 
 model FreezeAsset {
-  id                        Int        @id @default(autoincrement())
-  userId                    Int
-  label                     String
-  assetType                 String     @default("PROPERTY")
-  fairMarketValue           Decimal    @default(0)
-  adjustedCostBase          Decimal    @default(0)
-  annualGrowthPercent       Decimal    @default(0)
-  distributionYieldPercent  Decimal    @default(0)
-  associatedDebt            Decimal?
-  companyId                 Int?
-  propertyId                Int?
-  notes                     String?
-  createdAt                 DateTime   @default(now())
-  updatedAt                 DateTime   @updatedAt
+  id                       Int      @id @default(autoincrement())
+  userId                   Int
+  label                    String
+  assetType                String   @default("PROPERTY")
+  fairMarketValue          Decimal  @default(0)
+  adjustedCostBase         Decimal  @default(0)
+  annualGrowthPercent      Decimal  @default(0)
+  distributionYieldPercent Decimal  @default(0)
+  associatedDebt           Decimal?
+  companyId                Int?
+  propertyId               Int?
+  notes                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  property  Property?             @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   scenarios FreezeScenarioAsset[]
 
   @@index([userId])
@@ -709,21 +782,21 @@ model FreezeAsset {
 }
 
 model FreezeScenario {
-  id                          Int       @id @default(autoincrement())
-  userId                      Int
-  trustId                     Int?
-  label                       String
-  baseYear                    Int
-  freezeRatePercent           Decimal   @default(0)
+  id                           Int      @id @default(autoincrement())
+  userId                       Int
+  trustId                      Int?
+  label                        String
+  baseYear                     Int
+  freezeRatePercent            Decimal  @default(0)
   preferredDividendRatePercent Decimal  @default(0)
-  redemptionYears             Int       @default(20)
-  notes                       String?
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @updatedAt
+  redemptionYears              Int      @default(20)
+  notes                        String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
 
-  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trust   FamilyTrust? @relation(fields: [trustId], references: [id], onDelete: SetNull)
-  assets  FreezeScenarioAsset[]
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trust       FamilyTrust?          @relation(fields: [trustId], references: [id], onDelete: SetNull)
+  assets      FreezeScenarioAsset[]
   simulations FreezeSimulation[]
 
   @@index([userId])
@@ -731,12 +804,12 @@ model FreezeScenario {
 }
 
 model FreezeScenarioAsset {
-  id          Int              @id @default(autoincrement())
-  scenarioId  Int
-  assetId     Int
-  inclusionPercent Decimal     @default(100)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id               Int      @id @default(autoincrement())
+  scenarioId       Int
+  assetId          Int
+  inclusionPercent Decimal  @default(100)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   scenario FreezeScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
   asset    FreezeAsset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
@@ -746,55 +819,55 @@ model FreezeScenarioAsset {
 }
 
 model FreezeSimulation {
-  id                        Int       @id @default(autoincrement())
-  userId                    Int
-  scenarioId                Int
-  targetFreezeYear          Int
-  generations               Int
-  reinvestmentRatePercent   Decimal   @default(0)
-  marginalTaxRatePercent    Decimal   @default(0)
-  dividendRetentionPercent  Decimal   @default(0)
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  id                       Int      @id @default(autoincrement())
+  userId                   Int
+  scenarioId               Int
+  targetFreezeYear         Int
+  generations              Int
+  reinvestmentRatePercent  Decimal  @default(0)
+  marginalTaxRatePercent   Decimal  @default(0)
+  dividendRetentionPercent Decimal  @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scenario   FreezeScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-  result     FreezeSimulationResult?
+  user               User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenario           FreezeScenario                      @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  result             FreezeSimulationResult?
   beneficiaryResults FreezeSimulationBeneficiaryResult[]
-  redemptions FreezeSimulationRedemption[]
-  dividends   FreezeSimulationDividend[]
+  redemptions        FreezeSimulationRedemption[]
+  dividends          FreezeSimulationDividend[]
 
   @@index([userId])
   @@index([scenarioId])
 }
 
 model FreezeSimulationResult {
-  id                       Int       @id @default(autoincrement())
-  simulationId             Int       @unique
-  preferredShareValue      Decimal   @default(0)
-  capitalGainTriggered     Decimal   @default(0)
-  capitalGainTax           Decimal   @default(0)
-  totalDividends           Decimal   @default(0)
-  totalAfterTaxRetained    Decimal   @default(0)
-  latentTaxBefore          Decimal   @default(0)
-  latentTaxAfter           Decimal   @default(0)
-  notes                    Json?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  id                    Int      @id @default(autoincrement())
+  simulationId          Int      @unique
+  preferredShareValue   Decimal  @default(0)
+  capitalGainTriggered  Decimal  @default(0)
+  capitalGainTax        Decimal  @default(0)
+  totalDividends        Decimal  @default(0)
+  totalAfterTaxRetained Decimal  @default(0)
+  latentTaxBefore       Decimal  @default(0)
+  latentTaxAfter        Decimal  @default(0)
+  notes                 Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   simulation FreezeSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
 }
 
 model FreezeSimulationBeneficiaryResult {
-  id               Int        @id @default(autoincrement())
-  simulationId     Int
-  beneficiaryId    Int?
-  beneficiaryName  String
-  cumulativeValue  Decimal    @default(0)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id              Int      @id @default(autoincrement())
+  simulationId    Int
+  beneficiaryId   Int?
+  beneficiaryName String
+  cumulativeValue Decimal  @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  simulation  FreezeSimulation      @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  simulation  FreezeSimulation        @relation(fields: [simulationId], references: [id], onDelete: Cascade)
   beneficiary FamilyTrustBeneficiary? @relation(fields: [beneficiaryId], references: [id], onDelete: SetNull)
 
   @@index([simulationId])
@@ -802,13 +875,13 @@ model FreezeSimulationBeneficiaryResult {
 }
 
 model FreezeSimulationRedemption {
-  id           Int       @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   simulationId Int
   year         Int
-  outstanding  Decimal   @default(0)
-  redeemed     Decimal   @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  outstanding  Decimal  @default(0)
+  redeemed     Decimal  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   simulation FreezeSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
 
@@ -816,14 +889,14 @@ model FreezeSimulationRedemption {
 }
 
 model FreezeSimulationDividend {
-  id                 Int       @id @default(autoincrement())
-  simulationId       Int
-  year               Int
-  amount             Decimal   @default(0)
-  taxableAmount      Decimal   @default(0)
-  afterTaxRetained   Decimal   @default(0)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id               Int      @id @default(autoincrement())
+  simulationId     Int
+  year             Int
+  amount           Decimal  @default(0)
+  taxableAmount    Decimal  @default(0)
+  afterTaxRetained Decimal  @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   simulation FreezeSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
 
@@ -831,44 +904,44 @@ model FreezeSimulationDividend {
 }
 
 model InvestmentAccount {
-  id             Int                    @id @default(autoincrement())
-  userId         Int
-  label          String
-  accountType    String                 @default("TAXABLE")
-  institution    String?
-  accountNumber  String?
-  currency       String                 @default("CAD")
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  label         String
+  accountType   String   @default("TAXABLE")
+  institution   String?
+  accountNumber String?
+  currency      String   @default("CAD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  holdings      InvestmentHolding[]
-  transactions  InvestmentTransaction[]
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holdings     InvestmentHolding[]
+  transactions InvestmentTransaction[]
 
   @@index([userId, accountType])
 }
 
 model InvestmentHolding {
-  id               Int                  @id @default(autoincrement())
+  id               Int      @id @default(autoincrement())
   accountId        Int
   symbol           String
   description      String?
-  quantity         Decimal              @default(0)
-  bookValue        Decimal              @default(0)
-  marketValue      Decimal              @default(0)
-  currency         String               @default("CAD")
+  quantity         Decimal  @default(0)
+  bookValue        Decimal  @default(0)
+  marketValue      Decimal  @default(0)
+  currency         String   @default("CAD")
   targetAllocation Decimal?
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  account       InvestmentAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  transactions  InvestmentTransaction[]
+  account      InvestmentAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactions InvestmentTransaction[]
 
   @@index([accountId, symbol])
 }
 
 model InvestmentTransaction {
-  id              Int                 @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   accountId       Int
   holdingId       Int?
   transactionType String
@@ -876,45 +949,45 @@ model InvestmentTransaction {
   tradeDate       DateTime
   quantity        Decimal
   price           Decimal
-  fees            Decimal              @default(0)
+  fees            Decimal  @default(0)
   notes           String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  account InvestmentAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  holding InvestmentHolding?  @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  account InvestmentAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  holding InvestmentHolding? @relation(fields: [holdingId], references: [id], onDelete: SetNull)
 
   @@index([accountId, tradeDate])
   @@index([holdingId])
 }
 
 model FinancialGoal {
-  id            Int       @id @default(autoincrement())
-  userId        Int
-  name          String
-  goalType      String    @default("GENERAL")
-  targetAmount  Decimal   @default(0)
-  targetDate    DateTime?
-  priority      Int       @default(3)
-  status        String    @default("ACTIVE")
-  description   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  name         String
+  goalType     String    @default("GENERAL")
+  targetAmount Decimal   @default(0)
+  targetDate   DateTime?
+  priority     Int       @default(3)
+  status       String    @default("ACTIVE")
+  description  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  progress  FinancialGoalProgress[]
+  user     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress FinancialGoalProgress[]
 
   @@index([userId, status])
 }
 
 model FinancialGoalProgress {
-  id           Int       @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   goalId       Int
-  progressDate DateTime  @default(now())
-  amount       Decimal   @default(0)
+  progressDate DateTime @default(now())
+  amount       Decimal  @default(0)
   notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   goal FinancialGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
@@ -922,29 +995,29 @@ model FinancialGoalProgress {
 }
 
 model PropertyUnit {
-  id         Int      @id @default(autoincrement())
-  propertyId Int
-  label      String
-  squareFeet Int?
+  id           Int      @id @default(autoincrement())
+  propertyId   Int
+  label        String
+  squareFeet   Int?
   rentExpected Decimal?
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
 model Mortgage {
-  id              Int       @id @default(autoincrement())
-  propertyId      Int
-  lender          String
-  principal       Decimal
-  rateAnnual      Decimal
-  termMonths      Int
+  id                 Int          @id @default(autoincrement())
+  propertyId         Int
+  lender             String
+  principal          Decimal
+  rateAnnual         Decimal
+  termMonths         Int
   amortizationMonths Int
-  startDate       DateTime
-  paymentFrequency Int      // nombre de paiements par an
-  paymentAmount   Decimal
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  attachments     Attachment[]
+  startDate          DateTime
+  paymentFrequency   Int // nombre de paiements par an
+  paymentAmount      Decimal
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  property           Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  attachments        Attachment[]
 }
 
 model Revenue {
@@ -979,7 +1052,7 @@ model Invoice {
   propertyId  Int
   invoiceDate DateTime
   supplier    String
-  amount       Decimal
+  amount      Decimal
   category    String
   gst         Decimal?
   qst         Decimal?
@@ -992,7 +1065,7 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id        Int      @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   invoiceId Int
   label     String
   amount    Decimal
@@ -1000,40 +1073,39 @@ model InvoiceItem {
 }
 
 model DepreciationSetting {
-  id             Int      @id @default(autoincrement())
-  propertyId     Int      @unique
-  classCode      String
-  ccaRate        Decimal
-  openingUcc     Decimal
-  additions      Decimal
-  dispositions   Decimal
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id           Int      @id @default(autoincrement())
+  propertyId   Int      @unique
+  classCode    String
+  ccaRate      Decimal
+  openingUcc   Decimal
+  additions    Decimal
+  dispositions Decimal
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
-
 model Role {
-  id        Int    @id @default(autoincrement())
-  name      String @unique // 'ADMIN', 'COLLAB', 'INVITE'
-  users     UserRole[]
+  id    Int        @id @default(autoincrement())
+  name  String     @unique // 'ADMIN', 'COLLAB', 'INVITE'
+  users UserRole[]
 }
 
 model UserRole {
-  id        Int    @id @default(autoincrement())
+  id        Int  @id @default(autoincrement())
   userId    Int
   roleId    Int
   companyId Int?
 
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId, companyId], name: "userId_roleId_companyId")
 }
 
 model Attachment {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   propertyId  Int
   mortgageId  Int?
   title       String
@@ -1042,40 +1114,40 @@ model Attachment {
   size        Int
   storagePath String
   checksum    String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   mortgage Mortgage? @relation(fields: [mortgageId], references: [id], onDelete: SetNull)
 }
 
 model LeveragedBuybackScenario {
-  id                    Int       @id @default(autoincrement())
-  userId                Int
-  companyId             Int?
-  label                 String?
-  loanAmount            Decimal
-  interestRate          Decimal
-  taxRate               Decimal
-  expectedGrowth        Decimal
-  termMonths            Int
-  monthlyPayment        Decimal
-  totalInterest         Decimal
-  afterTaxInterest      Decimal
-  taxShield             Decimal
-  projectedShareValue   Decimal
-  projectedShareGain    Decimal
-  netGain               Decimal
-  breakEvenGrowth       Decimal
-  returnOnInvestment    Decimal
-  paybackYears          Decimal?
-  approved              Boolean   @default(false)
-  notes                 String?
-  generatedAt           DateTime  @default(now())
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                  Int      @id @default(autoincrement())
+  userId              Int
+  companyId           Int?
+  label               String?
+  loanAmount          Decimal
+  interestRate        Decimal
+  taxRate             Decimal
+  expectedGrowth      Decimal
+  termMonths          Int
+  monthlyPayment      Decimal
+  totalInterest       Decimal
+  afterTaxInterest    Decimal
+  taxShield           Decimal
+  projectedShareValue Decimal
+  projectedShareGain  Decimal
+  netGain             Decimal
+  breakEvenGrowth     Decimal
+  returnOnInvestment  Decimal
+  paybackYears        Decimal?
+  approved            Boolean  @default(false)
+  notes               String?
+  generatedAt         DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([userId])
@@ -1088,18 +1160,18 @@ enum RentalTaxFormType {
 }
 
 model RentalTaxStatement {
-  id          Int               @id @default(autoincrement())
-  userId      Int
-  propertyId  Int?
-  formType    RentalTaxFormType
-  taxYear     Int
-  payload     Json
-  computed    Json
-  notes       String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id         Int               @id @default(autoincrement())
+  userId     Int
+  propertyId Int?
+  formType   RentalTaxFormType
+  taxYear    Int
+  payload    Json
+  computed   Json
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   @@index([userId, taxYear])
@@ -1108,7 +1180,7 @@ model RentalTaxStatement {
 }
 
 model ValuationSnapshot {
-  id                Int       @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   userId            Int
   companyId         Int?
   valuationDate     DateTime
@@ -1120,7 +1192,7 @@ model ValuationSnapshot {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([userId, valuationDate])
@@ -1154,18 +1226,18 @@ enum NotificationStatus {
 }
 
 model AlertRule {
-  id          Int            @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   userId      Int
   name        String
   description String?
-  isActive    Boolean        @default(true)
-  severity    AlertSeverity  @default(INFO)
+  isActive    Boolean       @default(true)
+  severity    AlertSeverity @default(INFO)
   triggerType String
   condition   Json
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   events AlertEvent[]
 
   @@index([userId, isActive])
@@ -1173,18 +1245,18 @@ model AlertRule {
 }
 
 model AlertEvent {
-  id          Int               @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   userId      Int
   ruleId      Int
-  status      AlertEventStatus  @default(TRIGGERED)
+  status      AlertEventStatus @default(TRIGGERED)
   payload     Json?
-  triggeredAt DateTime          @default(now())
+  triggeredAt DateTime         @default(now())
   resolvedAt  DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rule          AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rule          AlertRule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   notifications Notification[]
 
   @@index([userId, ruleId])
@@ -1210,26 +1282,26 @@ model Notification {
 
 // Documents téléversés par l'utilisateur (généraux, ex: rapports d'impôt importés)
 model UploadedDocument {
-  id           Int       @id @default(autoincrement())
-  userId       Int
-  domain       String    // ex: 'personal-income', 'property', 'company'
-  label        String
-  notes        String?
-  originalName String
-  contentType  String
-  size         Int
-  storagePath  String
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  domain        String // ex: 'personal-income', 'property', 'company'
+  label         String
+  notes         String?
+  originalName  String
+  contentType   String
+  size          Int
+  storagePath   String
   // Copie binaire persistée pour résilience (fallback si le fichier local est manquant en prod)
-  content      Bytes?
-  checksum     String?
-  taxYear      Int?
+  content       Bytes?
+  checksum      String?
+  taxYear       Int?
   shareholderId Int?
-  metadata     Json?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shareholder Shareholder? @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareholder        Shareholder?        @relation(fields: [shareholderId], references: [id], onDelete: SetNull)
   personalTaxReturns PersonalTaxReturn[] @relation("PersonalTaxReturnDocument")
   taxSlips           TaxSlip[]           @relation("TaxSlipDocument")
 
@@ -1239,16 +1311,16 @@ model UploadedDocument {
 
 // Relation de co‑propriété par immeuble
 model PropertyCoOwner {
-  id                Int         @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   propertyId        Int
   shareholderId     Int
-  ownershipPercent  Decimal     @db.Decimal(6, 3) // ex: 50.000 (%). Somme approximativement 100.
-  priorityReturnCap Decimal?    @db.Decimal(18, 2) // ex: 100000.00 montant prioritaire à rembourser lors de vente/refi
+  ownershipPercent  Decimal  @db.Decimal(6, 3) // ex: 50.000 (%). Somme approximativement 100.
+  priorityReturnCap Decimal? @db.Decimal(18, 2) // ex: 100000.00 montant prioritaire à rembourser lors de vente/refi
   notes             String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   shareholder Shareholder @relation(fields: [shareholderId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, shareholderId])
