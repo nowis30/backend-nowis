@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticated } from '../middlewares/authenticated';
-import { nodes, impactedNodesFrom, recordRun, recentRuns, type DagNodeId, computeOrderAndRecord, getLastOutputs } from '../lib/dag';
+import { nodes, impactedNodesFrom, recordRun, recentRuns, type DagNodeId, runComputeOrder, getLastOutputs } from '../lib/dag';
 import { publish } from '../lib/events';
 
 const graphRouter = Router();
@@ -13,12 +13,12 @@ graphRouter.get('/nodes', (_req, res) => {
 
 const recalcSchema = z.object({ source: z.enum(['Tax', 'Immobilier', 'Compta', 'Previsions', 'Decideur']) });
 
-graphRouter.post('/recalc', (req, res) => {
+graphRouter.post('/recalc', async (req, res) => {
   const { source } = recalcSchema.parse(req.body);
   const order = impactedNodesFrom(source as DagNodeId);
   const run = { at: new Date().toISOString(), source: source as DagNodeId, order };
   recordRun(run);
-  const outputs = computeOrderAndRecord(order);
+  const outputs = await runComputeOrder(order);
   for (const n of order) publish({ type: `${n}.Updated`, at: run.at });
   res.json({ ...run, outputs });
 });

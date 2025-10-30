@@ -1,7 +1,8 @@
 import { env } from '../env';
-import type { Redis } from 'ioredis';
-let redisPub: Redis | null = null;
-let redisSub: Redis | null = null;
+// Typage souple pour éviter une dépendance dure aux types ioredis pendant les tests locaux sans node_modules
+type RedisLike = any;
+let redisPub: RedisLike | null = null;
+let redisSub: RedisLike | null = null;
 let subLoopRunning = false;
 
 type EventPayload = Record<string, unknown> | undefined;
@@ -28,7 +29,6 @@ export function publish(event: AppEvent): void {
   if (redisPub) {
     try {
       // Store as JSON to a single field for simplicity
-      // @ts-expect-error optional dep at runtime
       redisPub.xadd('events', '*', 'json', JSON.stringify(e)).catch(() => {});
     } catch {}
   }
@@ -48,6 +48,7 @@ export function getRecentEvents(limit = 50): AppEvent[] {
 export async function initEventBus(): Promise<void> {
   if (!env.REDIS_URL) return;
   try {
+    // @ts-ignore optional dependency: types may be missing in some local runs
     const { default: IORedis } = await import('ioredis');
     redisPub = new IORedis(env.REDIS_URL, { lazyConnect: true });
     redisSub = new IORedis(env.REDIS_URL, { lazyConnect: true });
@@ -79,7 +80,6 @@ async function consumerLoop(): Promise<void> {
   while (subLoopRunning && redisSub) {
     try {
       // Read next entries for group
-      // @ts-expect-error optional dep at runtime
       const res = await redisSub.xreadgroup('GROUP', 'nowis', consumerName, 'COUNT', 50, 'BLOCK', 1000, 'STREAMS', 'events', '>' );
       if (Array.isArray(res)) {
         for (const [, entries] of res as any[]) {

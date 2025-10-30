@@ -49,14 +49,17 @@ describe('ETL Transform + Load', () => {
     });
 
     expect(drafts.length).toBe(2);
-    for (const d of drafts) {
+    // Check balancing and that debit is 1100 and credit maps by category
+    const expectedCredits = ['4110', '4120']; // EMPLOYMENT -> 4110, ELIGIBLE_DIVIDEND -> 4120
+    drafts.forEach((d, i) => {
       const debit = d.lines.reduce((s, l) => s + l.debit, 0);
       const credit = d.lines.reduce((s, l) => s + l.credit, 0);
       expect(Math.round(debit * 100) / 100).toBe(Math.round(credit * 100) / 100);
-      // default mapping uses 1100 and 4200
-      const codes = d.lines.map((l) => l.accountCode).sort();
-      expect(codes).toEqual(['1100', '4200']);
-    }
+      const hasDebit1100 = d.lines.some((l) => l.accountCode === '1100' && l.debit > 0);
+      const creditLine = d.lines.find((l) => l.credit > 0);
+      expect(hasDebit1100).toBe(true);
+      expect(creditLine?.accountCode).toBe(expectedCredits[i]);
+    });
 
     const res = await postJournalDrafts(drafts);
     expect(res.entryIds.length).toBe(2);
