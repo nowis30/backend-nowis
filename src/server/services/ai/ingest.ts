@@ -14,6 +14,7 @@ export interface IngestRequest {
   file: { buffer: Buffer; contentType: string; filename?: string };
   options?: {
     autoCreate?: boolean;
+    postToLedger?: boolean;
     shareholderId?: number;
     taxYear?: number;
   };
@@ -274,6 +275,22 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     }
   }
 
+  // Option: poster dans le grand livre (double-partie) via Transform + Load
+  let postedEntryIds: number[] = [];
+  const defaultPost = !!(env as any).POST_TO_LEDGER_DEFAULT;
+  const shouldPost = typeof req.options?.postToLedger === 'boolean' ? req.options.postToLedger! : defaultPost;
+  if (shouldPost && items.length > 0) {
+    const { transformPersonalIncomeItemsToJournalDrafts } = await import('../etl/transform');
+    const { postJournalDrafts } = await import('../etl/load');
+    const drafts = transformPersonalIncomeItemsToJournalDrafts({
+      userId: req.userId,
+      taxYear: targetYear!,
+      items
+    });
+    const resPost = await postJournalDrafts(drafts);
+    postedEntryIds = resPost.entryIds;
+  }
+
   // Tentative: extraire aussi un résumé locatif (T776/TP-128) et pré-remplir un état par immeuble si détecté
   const rentalSummaries = await extractRentalTaxSummaries({
     buffer: req.file.buffer,
@@ -403,6 +420,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     taxYear: targetYear,
     extracted: items,
     createdIds,
+    postedEntryIds,
     rentalStatements: createdRentalStatementIds,
     documentId: createdDoc.id,
     taxReturnId: taxReturn.id,

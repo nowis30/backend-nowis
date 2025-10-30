@@ -87,6 +87,9 @@ const ingestQuerySchema = z.object({
   autoCreate: z
     .preprocess((v) => (typeof v === 'string' ? v.toLowerCase().trim() : v), z.enum(['true', 'false']).optional())
     .optional(),
+  postToLedger: z
+    .preprocess((v) => (typeof v === 'string' ? v.toLowerCase().trim() : v), z.enum(['true', 'false']).optional())
+    .optional(),
   shareholderId: z.coerce.number().int().positive().optional(),
   taxYear: z.coerce.number().int().min(2000).max(new Date().getFullYear() + 1).optional()
 });
@@ -100,7 +103,7 @@ aiRouter.post(
         return res.status(400).json({ error: 'Fichier requis (PDF ou image) sous le champ "file".' });
       }
 
-      const { domain, autoCreate, shareholderId, taxYear } = ingestQuerySchema.parse(req.query);
+  const { domain, autoCreate, postToLedger, shareholderId, taxYear } = ingestQuerySchema.parse(req.query);
       const shouldCreate = (autoCreate ?? 'false') === 'true';
 
       if (domain !== 'personal-income') {
@@ -114,7 +117,12 @@ aiRouter.post(
         userId: req.userId!,
         domain,
         file: { buffer: req.file.buffer, contentType: req.file.mimetype, filename: req.file.originalname },
-        options: { autoCreate: shouldCreate, shareholderId: shareholderId ?? undefined, taxYear: taxYear ?? undefined }
+        options: {
+          autoCreate: shouldCreate,
+          postToLedger: postToLedger ? (postToLedger === 'true') : undefined,
+          shareholderId: shareholderId ?? undefined,
+          taxYear: taxYear ?? undefined
+        }
       });
 
       res.json(result);

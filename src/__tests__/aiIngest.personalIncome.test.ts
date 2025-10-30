@@ -19,7 +19,9 @@ const db: any = {
   taxSlips: [] as any[],
   taxSlipLines: [] as any[],
   rentalTaxStatements: [] as any[],
-  personalIncomes: [] as any[]
+  personalIncomes: [] as any[],
+  journalEntries: [] as any[],
+  journalLines: [] as any[]
 };
 
 // Prisma mock (subset used by ingest)
@@ -167,6 +169,22 @@ jest.mock('../server/lib/prisma', () => ({
         db.rentalTaxStatements.push(rec);
         return rec;
       })
+    },
+    journalEntry: {
+      create: jest.fn(async (args: any) => {
+        const id = db.journalEntries.length + 1;
+        const rec = { id, createdAt: new Date(), updatedAt: new Date(), ...args.data };
+        db.journalEntries.push(rec);
+        return args.select ? { id } : rec;
+      })
+    },
+    journalEntryLine: {
+      create: jest.fn(async (args: any) => {
+        const id = db.journalLines.length + 1;
+        const rec = { id, createdAt: new Date(), updatedAt: new Date(), ...args.data };
+        db.journalLines.push(rec);
+        return rec;
+      })
     }
   }
 }));
@@ -258,5 +276,27 @@ describe('POST /api/ai/ingest (personal-income)', () => {
       .expect(200);
 
     expect(res2.body).toMatchObject({ status: 'DUPLICATE', duplicate: true });
+  });
+
+  it('postToLedger=true via query poste des écritures et retourne postedEntryIds', async () => {
+    mockExtract.mockResolvedValue({
+      taxYear: 2024,
+      items: [
+        { category: 'EMPLOYMENT', label: 'Salaire – ACME', amount: 1000 },
+        { category: 'OTHER', label: 'Autre', amount: 200 }
+      ],
+      confidence: 0.8
+    });
+
+    const res = await request(app)
+      .post('/api/ai/ingest?domain=personal-income&postToLedger=true')
+      .set('Authorization', 'Bearer fake')
+      .attach('file', Buffer.from('%PDF-1.7'), { filename: 'impot-2024.pdf', contentType: 'application/pdf' })
+      .expect(200);
+
+    expect(Array.isArray(res.body.postedEntryIds)).toBe(true);
+    expect(res.body.postedEntryIds.length).toBe(2);
+    expect(db.journalEntries.length).toBe(2);
+    expect(db.journalLines.length).toBe(4);
   });
 });

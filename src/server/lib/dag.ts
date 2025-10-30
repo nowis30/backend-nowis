@@ -19,18 +19,25 @@ for (const [u, v] of edges) downstream[u].push(v);
 
 function topoSort(subset: Set<DagNodeId>): DagNodeId[] {
   // Kahn's algorithm on induced subgraph
-  const indeg: Record<DagNodeId, number> = {} as any;
-  for (const n of subset) indeg[n] = 0;
+  const indeg: Record<DagNodeId, number> = {
+    Tax: 0,
+    Immobilier: 0,
+    Compta: 0,
+    Previsions: 0,
+    Decideur: 0
+  };
+  // Reset only for nodes in subset
+  for (const n of nodes) if (!subset.has(n)) delete (indeg as Record<string, number>)[n];
   for (const [u, v] of edges) if (subset.has(u) && subset.has(v)) indeg[v] = (indeg[v] ?? 0) + 1;
   const q: DagNodeId[] = [];
-  for (const n of subset) if ((indeg[n] ?? 0) === 0) q.push(n);
+  for (const n of Object.keys(indeg) as DagNodeId[]) if ((indeg[n] ?? 0) === 0) q.push(n);
   const order: DagNodeId[] = [];
   while (q.length) {
     const n = q.shift()!;
     order.push(n);
     for (const v of downstream[n] || []) {
       if (!subset.has(v)) continue;
-      indeg[v] -= 1;
+      indeg[v] = (indeg[v] ?? 0) - 1;
       if (indeg[v] === 0) q.push(v);
     }
   }
