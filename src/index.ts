@@ -6,6 +6,7 @@ import { startWealthSnapshotJob } from './server/jobs/wealthSnapshotJob';
 import { logger } from './server/lib/logger';
 import { runMigrations } from './server/lib/runMigrations';
 import { startMonitoringJobs } from './server/jobs/monitoringJobs';
+import { registerDagComputes } from './server/services/dag/registerComputes';
 
 // Render (et la plupart des PaaS) fournissent une variable d'env PORT et
 // exigent que l'application écoute sur 0.0.0.0 à ce port.
@@ -20,6 +21,9 @@ async function main() {
   const server = createServer(app);
   const port = env.PORT;
   const host = '0.0.0.0';
+
+  // Enregistrer les compute functions DAG réelles au démarrage de l'app
+  registerDagComputes();
 
   server.listen(port, host, () => {
     logger.info({ host, port }, 'API Nowis démarrée');

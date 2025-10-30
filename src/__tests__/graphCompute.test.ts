@@ -8,7 +8,7 @@ jest.mock('../server/middlewares/authenticated', () => ({
 
 // Simple helper to capture call order
 function makeRecorder(label: DagNodeId, calls: DagNodeId[]) {
-  return async () => {
+  return async (_node: DagNodeId, _ctx: any) => {
     calls.push(label);
     return { at: new Date().toISOString(), status: 'ok', details: { node: label, kind: 'mock' } } as const;
   };

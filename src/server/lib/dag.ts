@@ -1,4 +1,5 @@
 export type DagNodeId = 'Tax' | 'Compta' | 'Immobilier' | 'Previsions' | 'Decideur';
+export type ComputeContext = { userId: number; year?: number; params?: Record<string, unknown> };
 
 // Edges: from -> to (from updates trigger to recompute)
 const edges: Array<[DagNodeId, DagNodeId]> = [
@@ -74,10 +75,14 @@ type NodeOutput = { at: string; status: 'ok'; details?: Record<string, unknown> 
 const lastOutputs: Record<DagNodeId, NodeOutput | undefined> = { Tax: undefined, Immobilier: undefined, Compta: undefined, Previsions: undefined, Decideur: undefined };
 
 // --- Compute registry (injectable for real computations or tests) ---
-export type ComputeFn = (node: DagNodeId) => Promise<NodeOutput> | NodeOutput;
+export type ComputeFn = (node: DagNodeId, ctx: ComputeContext) => Promise<NodeOutput> | NodeOutput;
 
-const defaultCompute: ComputeFn = (id) => {
-  const out: NodeOutput = { at: new Date().toISOString(), status: 'ok', details: { node: id, kind: 'default' } };
+const defaultCompute: ComputeFn = (id, ctx) => {
+  const out: NodeOutput = {
+    at: new Date().toISOString(),
+    status: 'ok',
+    details: { node: id, kind: 'default', userId: ctx.userId, year: ctx.year }
+  };
   lastOutputs[id] = out;
   return out;
 };
@@ -102,10 +107,10 @@ export function resetComputeRegistry(): void {
   computeRegistry.Decideur = defaultCompute;
 }
 
-export async function runComputeOrder(order: DagNodeId[]): Promise<Record<DagNodeId, NodeOutput>> {
+export async function runComputeOrder(order: DagNodeId[], ctx: ComputeContext): Promise<Record<DagNodeId, NodeOutput>> {
   const outputs: Record<DagNodeId, NodeOutput> = {} as any;
   for (const n of order) {
-    const out = await computeRegistry[n](n);
+    const out = await computeRegistry[n](n, ctx);
     lastOutputs[n] = out;
     outputs[n] = out;
   }
