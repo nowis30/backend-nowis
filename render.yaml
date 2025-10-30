@@ -10,6 +10,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: POST_TO_LEDGER_DEFAULT
+        value: "true"
       - key: AI_PDF_MAX_PAGES
         value: ALL
       # Raccourcit les builds si Puppeteer n'est pas nécessaire à la compilation

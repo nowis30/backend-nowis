@@ -8,6 +8,7 @@ import { routes } from './routes/index';
 import { logger } from './lib/logger';
 import { errorHandler } from './middlewares/errorHandler';
 import { telemetry } from './middlewares/telemetry';
+import { initEventBus, shutdownEventBus } from './lib/events';
 
 const app = express();
 
@@ -44,3 +45,8 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use(errorHandler);
 
 export { app };
+
+// Démarrer le bus d'événements persistant si configuré
+void initEventBus();
+process.on('SIGINT', () => { void shutdownEventBus().finally(() => process.exit(0)); });
+process.on('SIGTERM', () => { void shutdownEventBus().finally(() => process.exit(0)); });

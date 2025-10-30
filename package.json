@@ -42,7 +42,8 @@
   "puppeteer-core": "^23.4.0",
   "zod": "^3.23.8",
   "@napi-rs/canvas": "^0.1.51",
-  "pdfjs-dist": "^4.7.76"
+  "pdfjs-dist": "^4.7.76",
+  "ioredis": "^5.3.2"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

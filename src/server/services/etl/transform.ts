@@ -25,6 +25,18 @@ type PersonalIncomeItem = {
 
 const DEFAULT_DEBIT_CASH = '1100'; // Trésorerie (seed)
 const DEFAULT_REV_ACCT = '4200'; // Autres revenus (seed)
+// Comptes revenus enrichis (voir seed)
+const REV_ACCOUNTS: Record<string, string> = {
+  EMPLOYMENT: '4110',
+  BUSINESS: '4115',
+  ELIGIBLE_DIVIDEND: '4120',
+  NON_ELIGIBLE_DIVIDEND: '4121',
+  CAPITAL_GAIN: '4130',
+  PENSION: '4140',
+  OAS: '4150',
+  CPP_QPP: '4151',
+  RRIF_RRSP: '4160'
+};
 
 function mapCategoryToRevenueAccount(category: string, customMap?: Record<string, string>): string {
   const upper = String(category || '').trim().toUpperCase();
@@ -37,6 +49,11 @@ function mapCategoryToRevenueAccount(category: string, customMap?: Record<string
     case 'ELIGIBLE_DIVIDEND':
     case 'NON_ELIGIBLE_DIVIDEND':
     case 'CAPITAL_GAIN':
+    case 'PENSION':
+    case 'OAS':
+    case 'CPP_QPP':
+    case 'RRIF_RRSP':
+      return REV_ACCOUNTS[upper] || DEFAULT_REV_ACCT;
     case 'OTHER':
       return DEFAULT_REV_ACCT;
     default:

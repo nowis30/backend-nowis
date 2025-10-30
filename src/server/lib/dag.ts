@@ -68,3 +68,23 @@ export function recordRun(run: RecalcRun) {
   if (runs.length > 100) runs.shift();
 }
 export function recentRuns(): RecalcRun[] { return runs.slice().reverse(); }
+
+// --- Simple compute outputs (in-memory) ---
+type NodeOutput = { at: string; status: 'ok'; details?: Record<string, unknown> };
+const lastOutputs: Record<DagNodeId, NodeOutput | undefined> = { Tax: undefined, Immobilier: undefined, Compta: undefined, Previsions: undefined, Decideur: undefined };
+
+export function computeNode(id: DagNodeId): NodeOutput {
+  const out: NodeOutput = { at: new Date().toISOString(), status: 'ok', details: { node: id } };
+  lastOutputs[id] = out;
+  return out;
+}
+
+export function computeOrderAndRecord(order: DagNodeId[]): Record<DagNodeId, NodeOutput> {
+  const outputs: Record<DagNodeId, NodeOutput> = {} as any;
+  for (const n of order) {
+    outputs[n] = computeNode(n);
+  }
+  return outputs;
+}
+
+export function getLastOutputs(): Record<DagNodeId, NodeOutput | undefined> { return { ...lastOutputs }; }

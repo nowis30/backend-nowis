@@ -17,6 +17,7 @@ const envSchema = z.object({
   OPENAI_AZURE_DEPLOYMENT: z.string().optional(),
   OPENAI_API_VERSION: z.string().optional(),
   ADVISOR_PORTAL_API_KEY: z.string().optional(),
+  REDIS_URL: z.string().url().optional(),
   POST_TO_LEDGER_DEFAULT: z
     .preprocess((value) => {
       if (typeof value === 'boolean') return value;

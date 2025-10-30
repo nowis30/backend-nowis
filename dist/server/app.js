@@ -13,6 +13,7 @@ const index_1 = require("./routes/index");
 const logger_1 = require("./lib/logger");
 const errorHandler_1 = require("./middlewares/errorHandler");
 const telemetry_1 = require("./middlewares/telemetry");
+const events_1 = require("./lib/events");
 const app = (0, express_1.default)();
 exports.app = app;
 // Derrière le proxy de Render/Cloudflare, il faut activer "trust proxy"
@@ -40,3 +41,7 @@ app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' });
 });
 app.use(errorHandler_1.errorHandler);
+// Démarrer le bus d'événements persistant si configuré
+void (0, events_1.initEventBus)();
+process.on('SIGINT', () => { void (0, events_1.shutdownEventBus)().finally(() => process.exit(0)); });
+process.on('SIGTERM', () => { void (0, events_1.shutdownEventBus)().finally(() => process.exit(0)); });
