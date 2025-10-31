@@ -659,7 +659,8 @@ personalIncomesRouter.delete(
       if (deleted.count === 0) {
         return res.status(404).json({ error: 'Revenu personnel introuvable.' });
       }
-
+      // Publie un événement pour l'observabilité et déclenchements éventuels
+      publish({ type: 'personal_income.deleted', userId: req.userId!, at: new Date().toISOString(), payload: { incomeId: id } });
       res.status(204).send();
     } catch (error) {
       next(error);
