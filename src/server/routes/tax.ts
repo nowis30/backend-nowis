@@ -12,7 +12,8 @@ import {
   prepareRentalTaxStatement,
   createRentalTaxStatement,
   listRentalTaxStatements,
-  getRentalTaxStatement
+  getRentalTaxStatement,
+  updateRentalTaxStatement
 } from '../services/rentalTaxService';
 
 const router = Router();
@@ -286,6 +287,31 @@ router.get('/rental-statements/:id/pdf', async (req: AuthenticatedRequest, res, 
       `attachment; filename="${statement.formType.toLowerCase()}-${statement.taxYear}.pdf"`
     );
     res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const rentalUpdateSchema = z.object({
+  propertyId: z.number().int().positive().optional().nullable(),
+  notes: z.string().trim().max(4000).optional().nullable()
+});
+
+router.put('/rental-statements/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: 'Identifiant invalide.' });
+    }
+    const payload = rentalUpdateSchema.parse(req.body);
+    const updated = await updateRentalTaxStatement(req.userId!, id, {
+      propertyId: Object.prototype.hasOwnProperty.call(payload, 'propertyId') ? (payload.propertyId ?? null) : undefined,
+      notes: Object.prototype.hasOwnProperty.call(payload, 'notes') ? (payload.notes ?? null) : undefined
+    });
+    if (!updated) {
+      return res.status(404).json({ error: 'Déclaration introuvable.' });
+    }
+    res.json(updated);
   } catch (error) {
     next(error);
   }

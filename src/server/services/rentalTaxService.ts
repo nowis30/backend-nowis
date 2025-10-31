@@ -1156,3 +1156,25 @@ export async function getRentalTaxStatement(
 
   return statement ? serializeRentalTaxStatement(statement) : null;
 }
+
+export async function updateRentalTaxStatement(
+  userId: number,
+  id: number,
+  data: { propertyId?: number | null; notes?: string | null }
+): Promise<RentalTaxStatementDto | null> {
+  const existing = await prisma.rentalTaxStatement.findFirst({ where: { id, userId } });
+  if (!existing) {
+    return null;
+  }
+  const updated = await prisma.rentalTaxStatement.update({
+    where: { id },
+    data: {
+      propertyId: data.propertyId === undefined ? existing.propertyId : data.propertyId,
+      notes: data.notes === undefined ? existing.notes : data.notes
+    },
+    include: {
+      property: { select: { id: true, name: true, address: true } }
+    }
+  });
+  return serializeRentalTaxStatement(updated);
+}
