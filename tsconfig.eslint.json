@@ -1,5 +1,10 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Enable Jest globals/types in editor for test files only
+    "types": ["jest", "node"],
+    "noEmit": true
+  },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
