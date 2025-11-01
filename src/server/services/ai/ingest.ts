@@ -305,13 +305,17 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
     });
 
     function bestMatchPropertyId(propertyName?: string | null, propertyAddress?: string | null): number | null {
-      const name = (propertyName ?? '').toLowerCase();
-      const addr = (propertyAddress ?? '').toLowerCase();
+      const name = (propertyName ?? '').toLowerCase().trim();
+      const addr = (propertyAddress ?? '').toLowerCase().trim();
       let bestId: number | null = null;
       let bestScore = 0;
       for (const p of props) {
-        const pn = (p.name ?? '').toLowerCase();
-        const pa = (p.address ?? '').toLowerCase();
+        const pn = (p.name ?? '').toLowerCase().trim();
+        const pa = (p.address ?? '').toLowerCase().trim();
+        // Matche exact sur adresse en priorité
+        if (addr && pa && addr === pa) {
+          return p.id;
+        }
         let score = 0;
         if (name && pn && (pn.includes(name) || name.includes(pn))) score += 2;
         if (addr) {
@@ -339,7 +343,32 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
         continue;
       }
 
-      const propertyId = bestMatchPropertyId(r?.propertyName, r?.propertyAddress);
+      let propertyId = bestMatchPropertyId(r?.propertyName, r?.propertyAddress);
+      // Auto-création d'un immeuble si aucun match trouvé mais des infos sont disponibles
+      if (!propertyId && (r?.propertyName || r?.propertyAddress)) {
+        // Double-check: tentative de match strict par adresse si non déjà fait
+        const addr = (r?.propertyAddress ?? '').toLowerCase().trim();
+        const byExactAddress = props.find((p) => (p.address ?? '').toLowerCase().trim() === addr);
+        if (byExactAddress) {
+          propertyId = byExactAddress.id;
+        } else {
+          const nameCandidate = (r?.propertyName && String(r.propertyName).trim().length > 0)
+            ? String(r.propertyName).trim()
+            : (r?.propertyAddress && String(r.propertyAddress).trim().length > 0)
+              ? String(r.propertyAddress).split('\n')[0].slice(0, 120)
+              : `Immeuble importé ${year}`;
+          const createdProp = await prisma.property.create({
+            data: {
+              userId: req.userId,
+              name: nameCandidate,
+              address: r?.propertyAddress ? String(r.propertyAddress).trim().slice(0, 500) : null
+            },
+            select: { id: true, name: true, address: true }
+          });
+          propertyId = createdProp.id;
+          props.push(createdProp);
+        }
+      }
 
       const payload = {
         metadata: [
