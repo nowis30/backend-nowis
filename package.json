@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
   "start:render": "node dist/scripts/startRender.js",
     "migrate:fallback": "prisma db push --accept-data-loss && npm run seed",
-    "build": "tsc --project tsconfig.json",
+  "build": "tsc --project tsconfig.build.json",
     "render-build": "prisma generate && npm run build",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
   "test": "jest --runInBand",
