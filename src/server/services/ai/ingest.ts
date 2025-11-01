@@ -409,6 +409,91 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
         }
       });
       createdRentalStatementIds.push(created.id);
+
+      // Auto-création (idempotente) de lignes Immeuble à partir du résumé T776/TP-128
+      // Règle: on crée au plus 3 lignes agrégées par formulaire/année/immmueble
+      //  - Revenu: Loyers bruts
+      //  - Revenu: Autres revenus locatifs
+      //  - Dépense: Dépenses totales (agrégées)
+      if (propertyId) {
+        const yearStart = new Date(year, 0, 1);
+
+        // 1) Loyers bruts -> Revenue (ANNUEL)
+        if (grossRents > 0) {
+          const rentLabel = `${formType} ${year} – Loyers bruts`;
+          const existingRent = await prisma.revenue.findFirst({
+            where: {
+              propertyId,
+              label: rentLabel,
+              startDate: yearStart
+            },
+            select: { id: true }
+          });
+          if (!existingRent) {
+            await prisma.revenue.create({
+              data: {
+                propertyId,
+                label: rentLabel,
+                amount: grossRents as any,
+                frequency: 'ANNUEL',
+                startDate: yearStart,
+                endDate: null
+              }
+            });
+          }
+        }
+
+        // 2) Autres revenus -> Revenue (ANNUEL)
+        if (otherIncome > 0) {
+          const otherLabel = `${formType} ${year} – Autres revenus locatifs`;
+          const existingOther = await prisma.revenue.findFirst({
+            where: {
+              propertyId,
+              label: otherLabel,
+              startDate: yearStart
+            },
+            select: { id: true }
+          });
+          if (!existingOther) {
+            await prisma.revenue.create({
+              data: {
+                propertyId,
+                label: otherLabel,
+                amount: otherIncome as any,
+                frequency: 'ANNUEL',
+                startDate: yearStart,
+                endDate: null
+              }
+            });
+          }
+        }
+
+        // 3) Dépenses totales -> Expense (ANNUEL)
+        if (totalExpenses > 0) {
+          const expLabel = `${formType} ${year} – Dépenses totales (agrégées)`;
+          const existingExp = await prisma.expense.findFirst({
+            where: {
+              propertyId,
+              label: expLabel,
+              startDate: yearStart
+            },
+            select: { id: true }
+          });
+          if (!existingExp) {
+            await prisma.expense.create({
+              data: {
+                propertyId,
+                label: expLabel,
+                category: formType,
+                amount: totalExpenses as any,
+                frequency: 'ANNUEL',
+                startDate: yearStart,
+                endDate: null
+              }
+            });
+          }
+        }
+      }
     }
   }
 

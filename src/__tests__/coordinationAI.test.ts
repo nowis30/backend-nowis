@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { prisma } from '../server/lib/prisma';
 import { runLeverageConversation } from '../server/services/ai/coordinationAI';
 import { purgeUsersByIds } from './helpers/prismaCleanup';

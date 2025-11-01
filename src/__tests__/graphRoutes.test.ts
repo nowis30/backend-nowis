@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import request from 'supertest';
 import { describe, it, expect, jest } from '@jest/globals';
 

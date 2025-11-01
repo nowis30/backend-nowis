@@ -10,7 +10,7 @@ jest.mock('../server/middlewares/authenticated', () => ({
   }
 }));
 
-// In-memory DB mock
+// In-memory DB for this suite
 const db: any = {
   users: [{ id: 1, email: 'ingest@example.com' }],
   shareholders: [] as any[],
@@ -19,45 +19,25 @@ const db: any = {
   personalTaxReturnLines: [] as any[],
   taxSlips: [] as any[],
   taxSlipLines: [] as any[],
-  rentalTaxStatements: [] as any[],
-  personalIncomes: [] as any[],
-  journalEntries: [] as any[],
-  journalLines: [] as any[]
+  properties: [] as any[],
+  revenues: [] as any[],
+  expenses: [] as any[],
+  rentalTaxStatements: [] as any[]
 };
 
-// Prisma mock (subset used by ingest)
+// Prisma mock (subset used by ingest for rental auto-lines)
 jest.mock('../server/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: jest.fn(async (args: any) => db.users.find((u: any) => u.id === args.where.id) || null)
     },
-    personalIncome: {
-      findFirst: jest.fn(async (args: any) => {
-        // Simule la recherche d'un revenu existant pour la déduplication
-        return db.personalIncomes.find(
-          (i: any) =>
-            i.shareholderId === args.where.shareholderId &&
-            i.taxYear === args.where.taxYear &&
-            i.label === args.where.label &&
-            i.amount === args.where.amount
-        ) || null;
-      }),
-      create: jest.fn(async (args: any) => {
-        const id = db.personalIncomes.length + 1;
-        const rec = { id, ...args.data };
-        db.personalIncomes.push(rec);
-        return args.select ? { id } : rec;
-      })
-    },
     shareholder: {
       findFirst: jest.fn(async (args: any) => {
-        // Ignore orderBy/select for test robustness
         const where = args.where || {};
         if (where.id && where.userId) {
           return db.shareholders.find((s: any) => s.id === where.id && s.userId === where.userId) || null;
         }
         if (where.userId) {
-          // Return the first shareholder for this userId
           return db.shareholders.filter((s: any) => s.userId === where.userId).sort((a: any, b: any) => a.id - b.id)[0] || null;
         }
         return null;
@@ -96,15 +76,9 @@ jest.mock('../server/lib/prisma', () => ({
           return db.uploadedDocuments[idx];
         }
         throw new Error('Doc not found');
-      }),
-      findMany: jest.fn(async (_args: any) => db.uploadedDocuments)
+      })
     },
     personalTaxReturn: {
-      findFirst: jest.fn(async (args: any) =>
-        db.personalTaxReturns
-          .filter((r: any) => db.shareholders.find((s: any) => s.id === r.shareholderId && s.userId === args.where.shareholder.userId))
-          .sort((a: any, b: any) => b.taxYear - a.taxYear)[0] || null
-      ),
       upsert: jest.fn(async (args: any) => {
         const existing = db.personalTaxReturns.find(
           (r: any) => r.shareholderId === args.where.shareholderId_taxYear.shareholderId && r.taxYear === args.where.shareholderId_taxYear.taxYear
@@ -162,7 +136,37 @@ jest.mock('../server/lib/prisma', () => ({
         return rec;
       })
     },
-    property: { findMany: jest.fn(async (_args: any) => []) },
+    property: {
+      findMany: jest.fn(async (args: any) => db.properties.filter((p: any) => p.userId === args.where.userId)),
+      create: jest.fn(async (args: any) => {
+        const id = db.properties.length + 1;
+        const rec = { id, ...args.data };
+        db.properties.push(rec);
+        return args.select ? { id: rec.id, name: rec.name, address: rec.address } : rec;
+      })
+    },
+    revenue: {
+      findFirst: jest.fn(async (args: any) =>
+        db.revenues.find((r: any) => r.propertyId === args.where.propertyId && r.label === args.where.label && new Date(r.startDate).getTime() === new Date(args.where.startDate).getTime()) || null
+      ),
+      create: jest.fn(async (args: any) => {
+        const id = db.revenues.length + 1;
+        const rec = { id, ...args.data };
+        db.revenues.push(rec);
+        return rec;
+      })
+    },
+    expense: {
+      findFirst: jest.fn(async (args: any) =>
+        db.expenses.find((e: any) => e.propertyId === args.where.propertyId && e.label === args.where.label && new Date(e.startDate).getTime() === new Date(args.where.startDate).getTime()) || null
+      ),
+      create: jest.fn(async (args: any) => {
+        const id = db.expenses.length + 1;
+        const rec = { id, ...args.data };
+        db.expenses.push(rec);
+        return rec;
+      })
+    },
     rentalTaxStatement: {
       create: jest.fn(async (args: any) => {
         const id = db.rentalTaxStatements.length + 1;
@@ -170,42 +174,25 @@ jest.mock('../server/lib/prisma', () => ({
         db.rentalTaxStatements.push(rec);
         return rec;
       })
-    },
-    journalEntry: {
-      create: jest.fn(async (args: any) => {
-        const id = db.journalEntries.length + 1;
-        const rec = { id, createdAt: new Date(), updatedAt: new Date(), ...args.data };
-        db.journalEntries.push(rec);
-        return args.select ? { id } : rec;
-      })
-    },
-    journalEntryLine: {
-      create: jest.fn(async (args: any) => {
-        const id = db.journalLines.length + 1;
-        const rec = { id, createdAt: new Date(), updatedAt: new Date(), ...args.data };
-        db.journalLines.push(rec);
-        return rec;
-      })
     }
   }
 }));
 
-// Mock tax extractor result with identity
+// Mock extractors
 const mockExtract = jest.fn() as jest.MockedFunction<(...args: any[]) => Promise<any>>;
+const mockExtractRent = jest.fn() as jest.MockedFunction<(...args: any[]) => Promise<any>>;
 jest.mock('../server/services/tax', () => ({
   extractPersonalTaxReturn: (...args: any[]) => mockExtract(...args),
-  extractRentalTaxSummaries: jest.fn(async () => [])
+  extractRentalTaxSummaries: (...args: any[]) => mockExtractRent(...args)
 }));
 
-// Mock document storage to avoid FS and force checksum for duplicates
+// Mock FS storage
 const mockSave: any = jest.fn();
 jest.mock('../server/services/documentStorage', () => ({
-  saveUserDocumentFile: (...args: any[]) => mockSave(...args),
-  resolveUserDocumentPath: (p: string) => p,
-  deleteUserDocumentFile: jest.fn()
+  saveUserDocumentFile: (...args: any[]) => mockSave(...args)
 }));
 
-// Mock env
+// Env
 jest.mock('../server/env', () => ({
   env: {
     PORT: 4000,
@@ -218,7 +205,7 @@ jest.mock('../server/env', () => ({
 
 import { app } from '../server/app';
 
-describe('POST /api/ai/ingest (personal-income)', () => {
+describe('AI ingest – auto-lignes Immeuble depuis T776/TP-128 (idempotent)', () => {
   beforeEach(() => {
     db.shareholders.length = 0;
     db.uploadedDocuments.length = 0;
@@ -226,78 +213,68 @@ describe('POST /api/ai/ingest (personal-income)', () => {
     db.personalTaxReturnLines.length = 0;
     db.taxSlips.length = 0;
     db.taxSlipLines.length = 0;
+    db.properties.length = 0;
+    db.revenues.length = 0;
+    db.expenses.length = 0;
+    db.rentalTaxStatements.length = 0;
     mockExtract.mockReset();
+    mockExtractRent.mockReset();
     mockSave.mockReset();
-
     mockSave.mockResolvedValue({ storagePath: 'user-1/docs/fixed.bin', checksum: 'fixedsum', filename: 'fixed.bin' });
   });
 
-  it('ingère un document, crée le retour fiscal et met à jour le profil (identité)', async () => {
-    mockExtract.mockResolvedValue({
-      taxYear: 2024,
-      items: [
-        { category: 'EMPLOYMENT', label: 'Salaire – ACME', amount: 60000, source: 'ACME', slipType: 'T4' }
-      ],
-      slips: [
-        { slipType: 'T4', issuer: 'ACME', accountNumber: '123', lines: [{ code: '14', label: 'Revenu d\'emploi', amount: 60000 }] }
-      ],
-      identity: { fullName: 'Jean Dupont', address: '123 Rue Principale, Montréal QC', birthDate: '1985-04-20', phone: '514-555-0000' },
-      confidence: 0.9
-    });
+  it('crée lignes Revenus/Dépenses ANNUELLES lors de l’ingestion, puis ne duplique pas au ré-import', async () => {
+    // Extraction principale: année ciblée
+    mockExtract.mockResolvedValue({ taxYear: 2024, items: [] });
+    // Résumé locatif: un seul bloc T776
+    mockExtractRent.mockResolvedValue([
+      {
+        formType: 'T776',
+        taxYear: 2024,
+        propertyName: 'Duplex St-Denis',
+        propertyAddress: '1234 Rue St-Denis, Montréal, QC',
+        grossRents: 24000,
+        otherIncome: 1200,
+        totalExpenses: 8000,
+        netIncome: 17200
+      }
+    ]);
 
-    const res = await request(app)
+    // 1) Premier import
+    const res1 = await request(app)
       .post('/api/ai/ingest?domain=personal-income&autoCreate=true')
       .set('Authorization', 'Bearer fake')
       .attach('file', Buffer.from('%PDF-1.7'), { filename: 'impot-2024.pdf', contentType: 'application/pdf' })
       .expect(200);
 
-    expect(res.body).toMatchObject({ status: 'OK', duplicate: false, taxYear: 2024 });
-    // Shareholder should exist and be updated
-    expect(db.shareholders.length).toBe(1);
-    expect(db.shareholders[0].displayName).toBe('Jean Dupont');
-    expect(db.shareholders[0].address).toContain('Montréal');
-    expect(new Date(db.shareholders[0].birthDate).getFullYear()).toBe(1985);
-  });
+  expect(res1.body).toMatchObject({ taxYear: 2024 });
+    // Immeuble auto-créé et état locatif créé
+    expect(db.properties.length).toBe(1);
+    expect(db.rentalTaxStatements.length).toBe(1);
+    // Lignes agrégées créées (2 revenus + 1 dépense)
+    expect(db.revenues.length).toBe(2);
+    expect(db.expenses.length).toBe(1);
 
-  it('détecte les doublons par checksum et renvoie le statut DUPLICATE', async () => {
-    mockExtract.mockResolvedValue({ taxYear: 2023, items: [], slips: [], confidence: 0.5 });
+    const labels = db.revenues.map((r: any) => r.label).concat(db.expenses.map((e: any) => e.label));
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'T776 2024 – Loyers bruts',
+        'T776 2024 – Autres revenus locatifs',
+        'T776 2024 – Dépenses totales (agrégées)'
+      ])
+    );
 
-    // First ingest
-    await request(app)
-      .post('/api/ai/ingest?domain=personal-income')
-      .set('Authorization', 'Bearer fake')
-      .attach('file', Buffer.from('same-buf'), { filename: 'a.pdf', contentType: 'application/pdf' })
-      .expect(200);
-
-    // Second ingest with same buffer -> same checksum
+    // 2) Ré-ingestion identique → pas de doublons sur lignes
     const res2 = await request(app)
-      .post('/api/ai/ingest?domain=personal-income')
-      .set('Authorization', 'Bearer fake')
-      .attach('file', Buffer.from('same-buf'), { filename: 'a.pdf', contentType: 'application/pdf' })
-      .expect(200);
-
-    expect(res2.body).toMatchObject({ status: 'DUPLICATE', duplicate: true });
-  });
-
-  it('postToLedger=true via query poste des écritures et retourne postedEntryIds', async () => {
-    mockExtract.mockResolvedValue({
-      taxYear: 2024,
-      items: [
-        { category: 'EMPLOYMENT', label: 'Salaire – ACME', amount: 1000 },
-        { category: 'OTHER', label: 'Autre', amount: 200 }
-      ],
-      confidence: 0.8
-    });
-
-    const res = await request(app)
-      .post('/api/ai/ingest?domain=personal-income&postToLedger=true')
+      .post('/api/ai/ingest?domain=personal-income&autoCreate=true')
       .set('Authorization', 'Bearer fake')
       .attach('file', Buffer.from('%PDF-1.7'), { filename: 'impot-2024.pdf', contentType: 'application/pdf' })
       .expect(200);
 
-    expect(Array.isArray(res.body.postedEntryIds)).toBe(true);
-    expect(res.body.postedEntryIds.length).toBe(2);
-    expect(db.journalEntries.length).toBe(2);
-    expect(db.journalLines.length).toBe(4);
+  expect(res2.body).toMatchObject({ taxYear: 2024 });
+    expect(db.properties.length).toBe(1); // pas de nouvel immeuble
+    expect(db.rentalTaxStatements.length).toBe(2); // un nouvel état peut être créé (un par import)
+    expect(db.revenues.length).toBe(2); // idempotent: pas de nouvelles lignes
+    expect(db.expenses.length).toBe(1);
   });
 });

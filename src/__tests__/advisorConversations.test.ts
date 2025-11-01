@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';

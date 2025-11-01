@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { evaluateScenario } from '../server/services/leverageService';
 
 describe('leverageService.evaluateScenario', () => {

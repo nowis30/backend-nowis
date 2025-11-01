@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import request from 'supertest';
 import { app } from '../server/app';
 import { resetComputeRegistry, registerCompute, type DagNodeId } from '../server/lib/dag';

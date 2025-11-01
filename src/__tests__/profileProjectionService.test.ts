@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { prisma } from '../server/lib/prisma';
 import { buildProfileProjection } from '../server/services/profileProjectionService';

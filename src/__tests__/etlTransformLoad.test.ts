@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 jest.mock('../server/lib/prisma', () => ({
