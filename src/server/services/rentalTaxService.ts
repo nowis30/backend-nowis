@@ -900,7 +900,13 @@ async function computeRentalTaxData(
   });
 
   if (properties.length === 0) {
-    throw new Error('Aucun immeuble correspondant.');
+    const error = new Error(
+      propertyId
+        ? "Immeuble introuvable pour préparer la déclaration."
+        : "Aucun immeuble disponible pour préparer la déclaration."
+    );
+    (error as Error & { status?: number }).status = 404;
+    throw error;
   }
 
   let grossRents = 0;

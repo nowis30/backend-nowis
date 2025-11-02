@@ -390,10 +390,23 @@ export async function extractPersonalTaxReturn(params: {
       response_format: { type: 'json_object' }
     };
 
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  let res: Awaited<ReturnType<typeof fetch>>;
+    try {
+      res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    } catch (err) {
+      logger.error({ err }, 'extractPersonalTaxReturn: fetch failed');
+      const wrapped = new Error(
+        "Connexion impossible au service d'extraction (OpenAI). Vérifiez la clé API et la connectivité sortante."
+      );
+      (wrapped as Error & { status?: number }).status = 502;
+      throw wrapped;
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`OpenAI error ${res.status}: ${text || res.statusText}`);
+      const message = text || res.statusText || 'Réponse inattendue du service OpenAI.';
+      const error = new Error(`OpenAI a renvoyé ${res.status}: ${message}`);
+      (error as Error & { status?: number }).status = res.status >= 500 ? 502 : res.status;
+      throw error;
     }
     const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const content = json.choices?.[0]?.message?.content ?? '';
