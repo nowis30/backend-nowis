@@ -1,62 +1,62 @@
 -- DropForeignKey
-ALTER TABLE "AdvisorConversation" DROP CONSTRAINT "AdvisorConversation_userId_fkey";
+ALTER TABLE IF EXISTS "AdvisorConversation" DROP CONSTRAINT IF EXISTS "AdvisorConversation_userId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "AdvisorConversationStep" DROP CONSTRAINT "AdvisorConversationStep_conversationId_fkey";
+ALTER TABLE IF EXISTS "AdvisorConversationStep" DROP CONSTRAINT IF EXISTS "AdvisorConversationStep_conversationId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "AlertEvent" DROP CONSTRAINT "AlertEvent_ruleId_fkey";
+ALTER TABLE IF EXISTS "AlertEvent" DROP CONSTRAINT IF EXISTS "AlertEvent_ruleId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "AlertEvent" DROP CONSTRAINT "AlertEvent_userId_fkey";
+ALTER TABLE IF EXISTS "AlertEvent" DROP CONSTRAINT IF EXISTS "AlertEvent_userId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "AlertRule" DROP CONSTRAINT "AlertRule_userId_fkey";
+ALTER TABLE IF EXISTS "AlertRule" DROP CONSTRAINT IF EXISTS "AlertRule_userId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "LeverageScenario" DROP CONSTRAINT "LeverageScenario_companyId_fkey";
+ALTER TABLE IF EXISTS "LeverageScenario" DROP CONSTRAINT IF EXISTS "LeverageScenario_companyId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "LeverageScenario" DROP CONSTRAINT "LeverageScenario_userId_fkey";
+ALTER TABLE IF EXISTS "LeverageScenario" DROP CONSTRAINT IF EXISTS "LeverageScenario_userId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "Notification" DROP CONSTRAINT "Notification_eventId_fkey";
+ALTER TABLE IF EXISTS "Notification" DROP CONSTRAINT IF EXISTS "Notification_eventId_fkey";
 
 -- AlterTable
-ALTER TABLE "AdvisorConversation" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "AdvisorConversation" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "AlertEvent" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "AlertEvent" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "AlertRule" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "AlertRule" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "FreezeSimulationDividend" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "FreezeSimulationDividend" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "FreezeSimulationRedemption" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "FreezeSimulationRedemption" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "LeverageScenario" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "LeverageScenario" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "Notification" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "Notification" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "PersonalIncome" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "PersonalIncome" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "PersonalTaxReturnLine" ALTER COLUMN "amount" SET DATA TYPE DECIMAL(65,30);
+ALTER TABLE IF EXISTS "PersonalTaxReturnLine" ALTER COLUMN "amount" SET DATA TYPE DECIMAL(65,30);
 
 -- AlterTable
-ALTER TABLE "Shareholder" ADD COLUMN     "personId" INTEGER;
+ALTER TABLE IF EXISTS "Shareholder" ADD COLUMN IF NOT EXISTS "personId" INTEGER;
 
 -- AlterTable
-ALTER TABLE "TaxSlipLine" ALTER COLUMN "amount" SET DATA TYPE DECIMAL(65,30);
+ALTER TABLE IF EXISTS "TaxSlipLine" ALTER COLUMN "amount" SET DATA TYPE DECIMAL(65,30);
 
 -- AlterTable
-ALTER TABLE "ValuationSnapshot" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE IF EXISTS "ValuationSnapshot" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- CreateTable
 CREATE TABLE "Person" (
@@ -133,70 +133,70 @@ CREATE UNIQUE INDEX "LegalEntity_companyId_key" ON "LegalEntity"("companyId");
 CREATE INDEX "Shareholder_personId_idx" ON "Shareholder"("personId");
 
 -- AddForeignKey
-ALTER TABLE "Person" ADD CONSTRAINT "Person_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "Person" ADD CONSTRAINT "Person_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Household" ADD CONSTRAINT "Household_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "Household" ADD CONSTRAINT "Household_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "HouseholdMember" ADD CONSTRAINT "HouseholdMember_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "HouseholdMember" ADD CONSTRAINT "HouseholdMember_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "HouseholdMember" ADD CONSTRAINT "HouseholdMember_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "HouseholdMember" ADD CONSTRAINT "HouseholdMember_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "LegalEntity" ADD CONSTRAINT "LegalEntity_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "LegalEntity" ADD CONSTRAINT "LegalEntity_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "LegalEntity" ADD CONSTRAINT "LegalEntity_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "LegalEntity" ADD CONSTRAINT "LegalEntity_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Shareholder" ADD CONSTRAINT "Shareholder_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "Shareholder" ADD CONSTRAINT "Shareholder_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "LeverageScenario" ADD CONSTRAINT "LeverageScenario_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "LeverageScenario" ADD CONSTRAINT "LeverageScenario_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "LeverageScenario" ADD CONSTRAINT "LeverageScenario_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "LeverageScenario" ADD CONSTRAINT "LeverageScenario_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AdvisorConversation" ADD CONSTRAINT "AdvisorConversation_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "AdvisorConversation" ADD CONSTRAINT "AdvisorConversation_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AdvisorConversationStep" ADD CONSTRAINT "AdvisorConversationStep_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "AdvisorConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "AdvisorConversationStep" ADD CONSTRAINT "AdvisorConversationStep_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "AdvisorConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AlertRule" ADD CONSTRAINT "AlertRule_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "AlertRule" ADD CONSTRAINT "AlertRule_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AlertEvent" ADD CONSTRAINT "AlertEvent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "AlertEvent" ADD CONSTRAINT "AlertEvent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AlertEvent" ADD CONSTRAINT "AlertEvent_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "AlertRule"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "AlertEvent" ADD CONSTRAINT "AlertEvent_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "AlertRule"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "AlertEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE IF EXISTS "Notification" ADD CONSTRAINT "Notification_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "AlertEvent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- RenameIndex
-ALTER INDEX "LeverageScenario_collateralProperty_idx" RENAME TO "LeverageScenario_collateralPropertyId_idx";
+ALTER INDEX IF EXISTS "LeverageScenario_collateralProperty_idx" RENAME TO "LeverageScenario_collateralPropertyId_idx";
 
 -- RenameIndex
-ALTER INDEX "LeverageScenario_targetProperty_idx" RENAME TO "LeverageScenario_targetPropertyId_idx";
+ALTER INDEX IF EXISTS "LeverageScenario_targetProperty_idx" RENAME TO "LeverageScenario_targetPropertyId_idx";
 
 -- RenameIndex
-ALTER INDEX "PersonalTaxReturnLine_return_section_idx" RENAME TO "PersonalTaxReturnLine_returnId_section_idx";
+ALTER INDEX IF EXISTS "PersonalTaxReturnLine_return_section_idx" RENAME TO "PersonalTaxReturnLine_returnId_section_idx";
 
 -- RenameIndex
-ALTER INDEX "PropertyCoOwner_property_idx" RENAME TO "PropertyCoOwner_propertyId_idx";
+ALTER INDEX IF EXISTS "PropertyCoOwner_property_idx" RENAME TO "PropertyCoOwner_propertyId_idx";
 
 -- RenameIndex
-ALTER INDEX "PropertyCoOwner_property_shareholder_uidx" RENAME TO "PropertyCoOwner_propertyId_shareholderId_key";
+ALTER INDEX IF EXISTS "PropertyCoOwner_property_shareholder_uidx" RENAME TO "PropertyCoOwner_propertyId_shareholderId_key";
 
 -- RenameIndex
-ALTER INDEX "PropertyCoOwner_shareholder_idx" RENAME TO "PropertyCoOwner_shareholderId_idx";
+ALTER INDEX IF EXISTS "PropertyCoOwner_shareholder_idx" RENAME TO "PropertyCoOwner_shareholderId_idx";
 
 -- RenameIndex
-ALTER INDEX "TaxSlip_return_idx" RENAME TO "TaxSlip_returnId_idx";
+ALTER INDEX IF EXISTS "TaxSlip_return_idx" RENAME TO "TaxSlip_returnId_idx";
 
 -- RenameIndex
-ALTER INDEX "TaxSlipLine_slip_idx" RENAME TO "TaxSlipLine_slipId_idx";
+ALTER INDEX IF EXISTS "TaxSlipLine_slip_idx" RENAME TO "TaxSlipLine_slipId_idx";
