@@ -1,7 +1,24 @@
 import { PrismaClient } from '@prisma/client';
 
+function stripWrappingQuotes(value: string): string {
+	const trimmed = value.trim();
+	if (
+		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+		(trimmed.startsWith("'") && trimmed.endsWith("'"))
+	) {
+		return trimmed.slice(1, -1).trim();
+	}
+	return trimmed;
+}
+
+function normalizeDatabaseUrl(rawValue: string | undefined): string | undefined {
+	if (!rawValue) return undefined;
+	const normalized = stripWrappingQuotes(rawValue);
+	return normalized.length > 0 ? normalized : undefined;
+}
+
 function buildDatasourceUrl(): string | undefined {
-	const baseUrl = process.env.DATABASE_URL;
+	const baseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 	if (!baseUrl) {
 		return undefined;
 	}
