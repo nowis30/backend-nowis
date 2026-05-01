@@ -79,6 +79,24 @@ function runCommand(command: string, args: string[], captureOutput = false): Pro
   });
 }
 
+function looksLikeForeignMigrationHistory(output: string): boolean {
+  return (
+    output.includes('your local migration history and the migrations table from your database are different') &&
+    output.includes('the migrations from the database are not found locally in prisma/migrations')
+  );
+}
+
+function extractDatabaseLabel(url: string | undefined): string {
+  if (!url) return 'unknown';
+  try {
+    const parsed = new URL(url);
+    const dbName = parsed.pathname.replace(/^\//, '') || 'unknown-db';
+    return `${parsed.hostname}/${dbName}`;
+  } catch {
+    return 'invalid-url';
+  }
+}
+
 export async function runMigrations(): Promise<void> {
   if (process.env.SKIP_DB_MIGRATIONS === '1') {
     logger.info('Skipping DB migrations due to SKIP_DB_MIGRATIONS=1');
@@ -100,6 +118,13 @@ export async function runMigrations(): Promise<void> {
     const hasFailedMigration = statusOutput.includes('p3009') || statusOutput.includes('failed');
     const hasTargetFailure =
       hasFailedMigration && statusOutput.includes(recoveryMigration.toLowerCase());
+
+    if (looksLikeForeignMigrationHistory(statusOutput)) {
+      const databaseLabel = extractDatabaseLabel(process.env.DATABASE_URL);
+      throw new Error(
+        `Migration history mismatch detected on ${databaseLabel}. This backend appears connected to another project's database. Set DATABASE_URL to the backend-nowis database before startup.`
+      );
+    }
 
     if (hasTargetFailure) {
       logger.warn(
