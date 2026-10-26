@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+
 import { getRecentEvents } from '../lib/events';
 import { authenticated } from '../middlewares/authenticated';
 

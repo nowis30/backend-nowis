@@ -107,8 +107,8 @@ export function resetComputeRegistry(): void {
   computeRegistry.Decideur = defaultCompute;
 }
 
-export async function runComputeOrder(order: DagNodeId[], ctx: ComputeContext): Promise<Record<DagNodeId, NodeOutput>> {
-  const outputs: Record<DagNodeId, NodeOutput> = {} as any;
+export async function runComputeOrder(order: DagNodeId[], ctx: ComputeContext): Promise<Partial<Record<DagNodeId, NodeOutput>>> {
+  const outputs: Partial<Record<DagNodeId, NodeOutput>> = {};
   for (const n of order) {
     const out = await computeRegistry[n](n, ctx);
     lastOutputs[n] = out;

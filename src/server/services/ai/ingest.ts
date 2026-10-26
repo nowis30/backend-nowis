@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { RentalTaxFormType } from '@prisma/client';
+
 import { prisma } from '../../lib/prisma';
 import { env } from '../../env';
 import { extractPersonalTaxReturn, extractRentalTaxSummaries } from '../../services/tax';
 import { saveUserDocumentFile } from '../../services/documentStorage';
-import type { RentalTaxFormType } from '@prisma/client';
 import { logger } from '../../lib/logger';
 
 type IngestDomain = 'personal-income' | 'property' | 'company';
@@ -527,7 +528,7 @@ async function ingestPersonalIncome(req: IngestRequest): Promise<any> {
         } as any
       }
     });
-  } catch {}
+  } catch { /* L’état d’ingestion reste facultatif si la mise à jour du document échoue. */ }
 
   return {
     shareholderId,

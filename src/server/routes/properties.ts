@@ -1037,8 +1037,8 @@ propertiesRouter.get('/:id/ownership', async (req: AuthenticatedRequest, res: Re
     const { id } = idParamSchema.parse(req.params);
     const property = await prisma.property.findFirst({ where: { id, userId: req.userId } });
     if (!property) return res.status(404).json({ error: 'Immeuble introuvable.' });
-    const owners = await (prisma as any).propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
-    const normalized = owners.map((o: any) => ({
+    const owners = await prisma.propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
+    const normalized = owners.map((o) => ({
       id: o.id,
       shareholderId: o.shareholderId,
       ownershipPercent: Number(o.ownershipPercent ?? 0),
@@ -1047,7 +1047,7 @@ propertiesRouter.get('/:id/ownership', async (req: AuthenticatedRequest, res: Re
       createdAt: o.createdAt,
       updatedAt: o.updatedAt
     }));
-    const sumPct = normalized.reduce((s: number, o: any) => s + (o.ownershipPercent || 0), 0);
+    const sumPct = normalized.reduce((s, o) => s + (o.ownershipPercent || 0), 0);
     res.json({ owners: normalized, sumPercent: sumPct });
   } catch (error) {
     next(error);
@@ -1067,9 +1067,9 @@ propertiesRouter.put('/:id/ownership', async (req: AuthenticatedRequest, res: Re
     }
 
     await prisma.$transaction([
-      (prisma as any).propertyCoOwner.deleteMany({ where: { propertyId: id } }),
+      prisma.propertyCoOwner.deleteMany({ where: { propertyId: id } }),
       ...(body.owners.map((o) => (
-        (prisma as any).propertyCoOwner.create({
+        prisma.propertyCoOwner.create({
           data: {
             propertyId: id,
             shareholderId: o.shareholderId,
@@ -1081,7 +1081,7 @@ propertiesRouter.put('/:id/ownership', async (req: AuthenticatedRequest, res: Re
       )))
     ]);
 
-    const owners = await (prisma as any).propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
+    const owners = await prisma.propertyCoOwner.findMany({ where: { propertyId: id }, orderBy: [{ shareholderId: 'asc' }] });
     res.json({ owners });
   } catch (error) {
     next(error);
