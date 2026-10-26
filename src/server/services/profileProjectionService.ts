@@ -98,7 +98,7 @@ export async function buildProfileProjection(
     ? roundCurrency(monthlyChanges.reduce((sum, value) => sum + value, 0) / monthlyChanges.length)
     : 0;
 
-  let averageMonthlyGrowthRate = monthlyRates.length
+  const averageMonthlyGrowthRate = monthlyRates.length
     ? monthlyRates.reduce((sum, value) => sum + value, 0) / monthlyRates.length
     : DEFAULT_MONTHLY_GROWTH_RATE;
 
@@ -115,10 +115,6 @@ export async function buildProfileProjection(
       averageMonthlyChange = roundCurrency(0.8 * averageMonthlyChange + 0.2 * estMonthlyNetSavings);
     }
 
-    // Si pas d'historique de taux, garder le défaut; sinon, ne pas forcer
-    if (monthlyRates.length === 0) {
-      averageMonthlyGrowthRate = averageMonthlyGrowthRate;
-    }
   }
 
   const referenceDate = context.referenceDate

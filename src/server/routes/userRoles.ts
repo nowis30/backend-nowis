@@ -7,6 +7,13 @@ import { requireRole } from '../middlewares/requireRole';
 
 const router = Router();
 
+// Explicitly select public user fields; Prisma includes every scalar with user:true.
+const userRoleInclude = {
+  user: { select: { id: true, email: true, createdAt: true, updatedAt: true } },
+  role: true,
+  company: true
+} as const;
+
 const idParamSchema = z.object({
   id: z.coerce.number().int().positive()
 });
@@ -25,7 +32,7 @@ router.use(requireRole('ADMIN'));
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const userRoles = await prisma.userRole.findMany({
-      include: { user: true, role: true, company: true },
+      include: userRoleInclude,
       orderBy: [{ user: { email: 'asc' } }, { role: { name: 'asc' } }]
     });
     res.json(userRoles);
@@ -39,7 +46,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const body = userRoleSchema.parse(req.body);
     const created = await prisma.userRole.create({
       data: { userId: body.userId, roleId: body.roleId, companyId: body.companyId ?? null },
-      include: { user: true, role: true, company: true }
+      include: userRoleInclude
     });
     res.status(201).json(created);
   } catch (error) {
@@ -54,7 +61,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     const updated = await prisma.userRole.update({
       where: { id },
       data: { userId: body.userId, roleId: body.roleId, companyId: body.companyId ?? null },
-      include: { user: true, role: true, company: true }
+      include: userRoleInclude
     });
     res.json(updated);
   } catch (error) {

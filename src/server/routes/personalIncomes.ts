@@ -33,8 +33,7 @@ const upload = multer({
 
     const ok = isPdfMime || isImageMime || isOctetPdf;
     if (!ok) {
-      const err: any = new Error('Type de fichier non supporté (PDF ou image requis).');
-      err.status = 400;
+      const err = Object.assign(new Error('Type de fichier non supporté (PDF ou image requis).'), { status: 400 });
       return cb(err);
     }
     cb(null, true);
@@ -148,13 +147,12 @@ personalIncomesRouter.get(
         orderBy: [{ taxYear: 'desc' }]
       });
 
-      const shAny = shareholder as any;
       res.json({
         id: shareholder.id,
         displayName: shareholder.displayName,
-        address: (shAny.address as string | null | undefined) ?? null,
-        birthDate: shAny.birthDate ? new Date(shAny.birthDate).toISOString() : null,
-        gender: (shAny.gender as string | null | undefined) ?? null,
+        address: (shareholder.address as string | null | undefined) ?? null,
+        birthDate: shareholder.birthDate ? new Date(shareholder.birthDate).toISOString() : null,
+        gender: (shareholder.gender as string | null | undefined) ?? null,
         contactEmail: shareholder.contactEmail ?? null,
         contactPhone: shareholder.contactPhone ?? null,
         latestTaxableIncome: latestReturn ? Number(latestReturn.taxableIncome) : null,
@@ -188,20 +186,18 @@ personalIncomesRouter.put(
         where: { id: shareholder.id },
         data: {
           displayName: payload.displayName ?? shareholder.displayName,
-          // Champs ajoutés: on cast en any tant que le client Prisma n'est pas régénéré
           ...(payload.address !== undefined ? { address: payload.address } : {}),
           ...(payload.birthDate !== undefined ? { birthDate: payload.birthDate as Date | null } : {}),
           ...(payload.gender !== undefined ? { gender: payload.gender } : {})
-        } as any
+        }
       });
 
-      const upAny = updated as any;
       res.json({
         id: updated.id,
         displayName: updated.displayName,
-        address: (upAny.address as string | null | undefined) ?? null,
-        birthDate: upAny.birthDate ? new Date(upAny.birthDate).toISOString() : null,
-        gender: (upAny.gender as string | null | undefined) ?? null,
+        address: (updated.address as string | null | undefined) ?? null,
+        birthDate: updated.birthDate ? new Date(updated.birthDate).toISOString() : null,
+        gender: (updated.gender as string | null | undefined) ?? null,
         contactEmail: updated.contactEmail ?? null,
         contactPhone: updated.contactPhone ?? null
       });
@@ -264,8 +260,8 @@ personalIncomesRouter.get('/returns', async (req: AuthenticatedRequest, res: Res
     if (!ret) return res.json({ return: null, lines: [], slips: [] });
 
     const [lines, slips] = await Promise.all([
-      (prisma as any).personalTaxReturnLine.findMany({ where: { returnId: ret.id }, orderBy: [{ section: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }] }),
-      (prisma as any).taxSlip.findMany({ where: { returnId: ret.id }, orderBy: [{ id: 'asc' }], include: { lines: true } })
+      prisma.personalTaxReturnLine.findMany({ where: { returnId: ret.id }, orderBy: [{ section: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }] }),
+      prisma.taxSlip.findMany({ where: { returnId: ret.id }, orderBy: [{ id: 'asc' }], include: { lines: true } })
     ]);
 
     res.json({
@@ -277,10 +273,10 @@ personalIncomesRouter.get('/returns', async (req: AuthenticatedRequest, res: Res
         federalTax: Number(ret.federalTax ?? 0),
         provincialTax: Number(ret.provincialTax ?? 0),
         balanceDue: Number(ret.balanceDue ?? 0),
-        documentId: (ret as any).documentId ?? null,
-        rawExtraction: (ret as any).rawExtraction ?? null
+        documentId: ret.documentId ?? null,
+        rawExtraction: ret.rawExtraction ?? null
       },
-      lines: lines.map((l: any) => ({
+      lines: lines.map((l) => ({
         id: l.id,
         section: l.section,
         code: l.code ?? null,
@@ -289,14 +285,14 @@ personalIncomesRouter.get('/returns', async (req: AuthenticatedRequest, res: Res
         orderIndex: l.orderIndex ?? 0,
         metadata: l.metadata ?? null
       })),
-      slips: slips.map((s: any) => ({
+      slips: slips.map((s) => ({
         id: s.id,
         slipType: s.slipType,
         issuer: s.issuer ?? null,
         accountNumber: s.accountNumber ?? null,
         documentId: s.documentId ?? null,
         metadata: s.metadata ?? null,
-        lines: (s.lines ?? []).map((li: any) => ({ id: li.id, code: li.code ?? null, label: li.label, amount: Number(li.amount ?? 0), orderIndex: li.orderIndex ?? 0, metadata: li.metadata ?? null }))
+        lines: (s.lines ?? []).map((li) => ({ id: li.id, code: li.code ?? null, label: li.label, amount: Number(li.amount ?? 0), orderIndex: li.orderIndex ?? 0, metadata: li.metadata ?? null }))
       }))
     });
   } catch (error) {
@@ -360,7 +356,7 @@ personalIncomesRouter.post('/returns/:id/lines', async (req: AuthenticatedReques
     const payload = lineCreateSchema.parse(req.body);
     const ret = await prisma.personalTaxReturn.findFirst({ where: { id, shareholder: { userId: req.userId } } });
     if (!ret) return res.status(404).json({ error: 'Retour fiscal introuvable.' });
-    const created = await (prisma as any).personalTaxReturnLine.create({
+    const created = await prisma.personalTaxReturnLine.create({
       data: {
         returnId: ret.id,
         section: payload.section,
@@ -379,13 +375,13 @@ personalIncomesRouter.post('/returns/:id/lines', async (req: AuthenticatedReques
 
 personalIncomesRouter.put('/returns/:id/lines/:lineId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { id, lineId } = { ...idParam.parse(req.params), lineId: z.coerce.number().int().positive().parse(req.params.lineId) } as any;
+    const { id, lineId } = { ...idParam.parse(req.params), lineId: z.coerce.number().int().positive().parse(req.params.lineId) };
     const payload = lineUpdateSchema.parse(req.body);
-    const line = await (prisma as any).personalTaxReturnLine.findFirst({
+    const line = await prisma.personalTaxReturnLine.findFirst({
       where: { id: lineId, taxReturn: { id, shareholder: { userId: req.userId } } }
     });
     if (!line) return res.status(404).json({ error: 'Ligne introuvable.' });
-    await (prisma as any).personalTaxReturnLine.update({
+    await prisma.personalTaxReturnLine.update({
       where: { id: lineId },
       data: {
         ...(payload.section ? { section: payload.section } : {}),
@@ -404,12 +400,12 @@ personalIncomesRouter.put('/returns/:id/lines/:lineId', async (req: Authenticate
 
 personalIncomesRouter.delete('/returns/:id/lines/:lineId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { id, lineId } = { ...idParam.parse(req.params), lineId: z.coerce.number().int().positive().parse(req.params.lineId) } as any;
-    const line = await (prisma as any).personalTaxReturnLine.findFirst({
+    const { id, lineId } = { ...idParam.parse(req.params), lineId: z.coerce.number().int().positive().parse(req.params.lineId) };
+    const line = await prisma.personalTaxReturnLine.findFirst({
       where: { id: lineId, taxReturn: { id, shareholder: { userId: req.userId } } }
     });
     if (!line) return res.status(404).json({ error: 'Ligne introuvable.' });
-    await (prisma as any).personalTaxReturnLine.delete({ where: { id: lineId } });
+    await prisma.personalTaxReturnLine.delete({ where: { id: lineId } });
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -433,7 +429,7 @@ personalIncomesRouter.post('/returns/:id/slips', async (req: AuthenticatedReques
     const payload = slipCreateSchema.parse(req.body);
     const ret = await prisma.personalTaxReturn.findFirst({ where: { id, shareholder: { userId: req.userId } } });
     if (!ret) return res.status(404).json({ error: 'Retour fiscal introuvable.' });
-    const created = await (prisma as any).taxSlip.create({
+    const created = await prisma.taxSlip.create({
       data: {
         returnId: ret.id,
         slipType: payload.slipType,
@@ -452,9 +448,9 @@ personalIncomesRouter.put('/slips/:slipId', async (req: AuthenticatedRequest, re
   try {
     const { slipId } = slipIdParam.parse(req.params);
     const payload = slipUpdateSchema.parse(req.body);
-    const slip = await (prisma as any).taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
+    const slip = await prisma.taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
     if (!slip) return res.status(404).json({ error: 'Feuillet introuvable.' });
-    await (prisma as any).taxSlip.update({
+    await prisma.taxSlip.update({
       where: { id: slipId },
       data: {
         ...(payload.slipType !== undefined ? { slipType: payload.slipType } : {}),
@@ -472,9 +468,9 @@ personalIncomesRouter.put('/slips/:slipId', async (req: AuthenticatedRequest, re
 personalIncomesRouter.delete('/slips/:slipId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { slipId } = slipIdParam.parse(req.params);
-    const slip = await (prisma as any).taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
+    const slip = await prisma.taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
     if (!slip) return res.status(404).json({ error: 'Feuillet introuvable.' });
-    await (prisma as any).taxSlip.delete({ where: { id: slipId } });
+    await prisma.taxSlip.delete({ where: { id: slipId } });
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -495,9 +491,9 @@ personalIncomesRouter.post('/slips/:slipId/lines', async (req: AuthenticatedRequ
   try {
     const { slipId } = slipIdParam.parse(req.params);
     const payload = slipLineCreateSchema.parse(req.body);
-    const slip = await (prisma as any).taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
+    const slip = await prisma.taxSlip.findFirst({ where: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } });
     if (!slip) return res.status(404).json({ error: 'Feuillet introuvable.' });
-    const created = await (prisma as any).taxSlipLine.create({
+    const created = await prisma.taxSlipLine.create({
       data: {
         slipId,
         code: payload.code ?? null,
@@ -518,9 +514,9 @@ personalIncomesRouter.put('/slips/:slipId/lines/:lineId', async (req: Authentica
     const { slipId } = slipIdParam.parse(req.params);
     const lineId = z.coerce.number().int().positive().parse(req.params.lineId);
     const payload = slipLineUpdateSchema.parse(req.body);
-    const line = await (prisma as any).taxSlipLine.findFirst({ where: { id: lineId, slip: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } } });
+    const line = await prisma.taxSlipLine.findFirst({ where: { id: lineId, slip: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } } });
     if (!line) return res.status(404).json({ error: 'Ligne de feuillet introuvable.' });
-    await (prisma as any).taxSlipLine.update({
+    await prisma.taxSlipLine.update({
       where: { id: lineId },
       data: {
         ...(payload.code !== undefined ? { code: payload.code ?? null } : {}),
@@ -540,9 +536,9 @@ personalIncomesRouter.delete('/slips/:slipId/lines/:lineId', async (req: Authent
   try {
     const { slipId } = slipIdParam.parse(req.params);
     const lineId = z.coerce.number().int().positive().parse(req.params.lineId);
-    const line = await (prisma as any).taxSlipLine.findFirst({ where: { id: lineId, slip: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } } });
+    const line = await prisma.taxSlipLine.findFirst({ where: { id: lineId, slip: { id: slipId, taxReturn: { shareholder: { userId: req.userId } } } } });
     if (!line) return res.status(404).json({ error: 'Ligne de feuillet introuvable.' });
-    await (prisma as any).taxSlipLine.delete({ where: { id: lineId } });
+    await prisma.taxSlipLine.delete({ where: { id: lineId } });
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -820,20 +816,20 @@ personalIncomesRouter.post(
             data: {
               shareholderId: resolvedShareholderId!,
               taxYear: targetYear,
-              rawExtraction: extraction as any
+              rawExtraction: extraction
             }
           });
         } else {
-          await prisma.personalTaxReturn.update({ where: { id: existingReturn.id }, data: { rawExtraction: extraction as any } });
+          await prisma.personalTaxReturn.update({ where: { id: existingReturn.id }, data: { rawExtraction: extraction } });
           // Nettoie les feuillets existants pour recharger proprement
-          await (prisma as any).taxSlipLine.deleteMany({ where: { slip: { returnId: existingReturn.id } } });
-          await (prisma as any).taxSlip.deleteMany({ where: { returnId: existingReturn.id } });
+          await prisma.taxSlipLine.deleteMany({ where: { slip: { returnId: existingReturn.id } } });
+          await prisma.taxSlip.deleteMany({ where: { returnId: existingReturn.id } });
         }
         createdReturnId = existingReturn.id;
 
         const slips = Array.isArray(extraction.slips) ? extraction.slips : [];
         for (const s of slips) {
-          const slip = await (prisma as any).taxSlip.create({
+          const slip = await prisma.taxSlip.create({
             data: {
               returnId: existingReturn.id,
               slipType: s.slipType,
@@ -846,7 +842,7 @@ personalIncomesRouter.post(
           createdSlipIds.push(slip.id);
           const lines = Array.isArray(s.lines) ? s.lines : [];
           for (const li of lines) {
-            await (prisma as any).taxSlipLine.create({
+            await prisma.taxSlipLine.create({
               data: {
                 slipId: slip.id,
                 code: li.code ?? null,
@@ -863,7 +859,7 @@ personalIncomesRouter.post(
 
       // Optionnel: poster dans le grand livre (double-partie) via Transform + Load
       let postedEntryIds: number[] = [];
-      const defaultPost = !!(env as any).POST_TO_LEDGER_DEFAULT;
+      const defaultPost = !!env.POST_TO_LEDGER_DEFAULT;
       const shouldPost = (postToLedger ?? (defaultPost ? 'true' : 'false')) === 'true';
       if (shouldPost && items.length > 0) {
         const drafts = transformPersonalIncomeItemsToJournalDrafts({

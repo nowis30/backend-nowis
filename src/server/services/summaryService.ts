@@ -481,12 +481,12 @@ export async function buildSummary(userId: number): Promise<SummaryResponse> {
         provincialTax: safeNumber(latestPersonalReturn.provincialTax as DecimalLike),
         balanceDue: safeNumber(latestPersonalReturn.balanceDue as DecimalLike),
         returnsCount: personalReturnsCount,
-        slipsCount: Array.isArray((latestPersonalReturn as any).slips)
-          ? (latestPersonalReturn as any).slips.length
+        slipsCount: Array.isArray(latestPersonalReturn.slips)
+          ? latestPersonalReturn.slips.length
           : 0,
-        slipTypeCounts: Array.isArray((latestPersonalReturn as any).slips)
+        slipTypeCounts: Array.isArray(latestPersonalReturn.slips)
           ? Object.entries(
-              ((latestPersonalReturn as any).slips as Array<{ slipType: string }>).reduce<Record<string, number>>(
+              latestPersonalReturn.slips.reduce<Record<string, number>>(
                 (acc, s) => {
                   const key = (s.slipType || 'UNKNOWN').toUpperCase();
                   acc[key] = (acc[key] ?? 0) + 1;

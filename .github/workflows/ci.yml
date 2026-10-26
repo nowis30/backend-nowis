@@ -1,0 +1,43 @@
+name: Backend checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: nowis_test
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: nowis_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U nowis_test -d nowis_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://nowis_test:isolated-test-only@127.0.0.1:5432/nowis_ci
+      JWT_SECRET: isolated-ci-only-key-not-for-production
+      ADVISOR_ENGINE: heuristic
+      ALLOW_PUBLIC_REGISTRATION: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Create schema in disposable CI database
+        run: npx prisma db push --skip-generate
+      - run: npm run build
+      - run: npm test
+      - run: npm run lint

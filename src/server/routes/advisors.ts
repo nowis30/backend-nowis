@@ -2,13 +2,14 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 
 import { env } from '../env';
+import { advisorHealthStatus } from '../services/advisors/healthStatus';
 import { advisorAccess } from '../middlewares/advisorAccess';
 import type { AuthenticatedRequest } from '../middlewares/authenticated';
 import { evaluateAdvisors, getAdvisorQuestions } from '../services/advisors/coordinator';
 import { runAvocatAdvisor } from '../services/advisors/avocat';
 import { runComptableAdvisor } from '../services/advisors/comptable';
 import { runFiscalisteAdvisor } from '../services/advisors/fiscaliste';
-import { askGptExpert, pingOpenAI } from '../services/advisors/gptEngine';
+import { askGptExpert } from '../services/advisors/gptEngine';
 import { nextConversationStep } from '../services/advisors/convoEngine';
 import {
   listUserConversations,
@@ -59,14 +60,9 @@ const targetedQuestionSchema = z
   })
   .strict();
 
-// Endpoint de santé PUBLIC (pas d'authentification) pour diagnostiquer la connectivité OpenAI/Azure
-router.get('/health', async (_req, res) => {
-  try {
-    const status = await pingOpenAI();
-    res.json({ engine: 'gpt', openai: status });
-  } catch (err) {
-    res.status(500).json({ engine: 'gpt', error: err instanceof Error ? err.message : String(err) });
-  }
+// Public liveness/configuration only: no provider request or billable work.
+router.get('/health', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json(advisorHealthStatus(env));
 });
 
 router.get('/questions', advisorAccess, (_req, res) => {

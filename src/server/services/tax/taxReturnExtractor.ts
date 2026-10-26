@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import path from 'node:path';
+
 import { createCanvas, type Canvas, type SKRSContext2D } from '@napi-rs/canvas';
 
 import { env } from '../../env';
@@ -75,59 +76,6 @@ function normalizeOpenAIBaseUrl(base: string | undefined): string {
 
 function chooseVisionModel(): string {
   return env.OPENAI_MODEL_VISION || env.OPENAI_MODEL_TARGETED || env.OPENAI_MODEL || 'gpt-4o-mini';
-}
-
-async function renderPdfFirstPageToDataUrlFromBuffer(buffer: Uint8Array): Promise<string> {
-  // Diagnostic: vérifier les types en prod
-  // @ts-ignore Buffer may be undefined in some runtimes
-  const seenAsBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(buffer as any);
-  logger.info(
-    {
-      where: 'renderPdfFirstPageToDataUrlFromBuffer',
-      seenAsBuffer,
-      constructor: (buffer as any)?.constructor?.name,
-      byteLength: buffer?.byteLength
-    },
-    'ai:pdf: start render first page'
-  );
-  const pdfjsLib = await loadPdfJs();
-  // Crée une copie ArrayBuffer détachée pour éviter tout aliasing de mémoire avec Buffer
-  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  const pure = new Uint8Array(ab);
-  // Fournit l'URL des polices standard pour éviter les warnings en prod
-  // Préfère les polices locales (node_modules) pour éviter les échecs réseau en prod
-  let standardFontDataUrl: string;
-  try {
-    // Résout le dossier standard_fonts dans pdfjs-dist
-    const pkgPath = require.resolve('pdfjs-dist/package.json');
-    const dir = path.join(path.dirname(pkgPath), 'standard_fonts') + '/';
-    standardFontDataUrl = dir.replace(/\\/g, '/');
-  } catch {
-    const version = (pdfjsLib as any)?.version || 'latest';
-    standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${version}/standard_fonts/`;
-  }
-  const pdfDocument = await pdfjsLib
-    .getDocument({ data: pure, disableWorker: true, standardFontDataUrl })
-    .promise;
-  if (pdfDocument.numPages < 1) {
-    throw new Error('PDF vide: aucune page à analyser.');
-  }
-  const page = await pdfDocument.getPage(1);
-  const viewport = page.getViewport({ scale: 2 });
-  const canvasFactory = new NodeCanvasFactory();
-  const { canvas, context } = canvasFactory.create(viewport.width, viewport.height);
-
-  const renderContext = {
-    canvasContext: context,
-    viewport,
-    canvasFactory
-  };
-
-  await page.render(renderContext).promise;
-  const pngBuffer = canvas.toBuffer('image/png');
-  canvasFactory.destroy({ canvas, context });
-  pdfDocument.cleanup();
-  return `data:image/png;base64,${pngBuffer.toString('base64')}`;
 }
 
 async function renderPdfPagesToDataUrlsFromBuffer(
@@ -206,7 +154,7 @@ export type ExtractedTaxSlip = {
   lines: ExtractedSlipLine[];
 };
 
-export interface ExtractedPersonalTaxReturn {
+export type ExtractedPersonalTaxReturn = {
   taxYear?: number;
   items: ExtractedPersonalIncomeItem[];
   slips?: ExtractedTaxSlip[];
@@ -219,7 +167,7 @@ export interface ExtractedPersonalTaxReturn {
     phone?: string;
     sin?: string; // if visible, mask except last 3 if possible
   };
-}
+};
 
 function buildPrompt(): string {
   return [
@@ -315,18 +263,15 @@ export async function extractPersonalTaxReturn(params: {
   const { contentType } = params;
   // Normalise en Uint8Array (attention: Buffer hérite de Uint8Array donc il faut le détecter explicitement)
   let binary: Uint8Array;
-  // @ts-ignore Buffer global peut ne pas exister selon l'environnement
-  const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(params.buffer as any);
+  const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(params.buffer);
   if (isBuffer) {
     // Copie vers un Uint8Array pur
-    // @ts-ignore Buffer typings
-    binary = new Uint8Array(params.buffer as any);
+    binary = new Uint8Array(params.buffer);
   } else if (params.buffer instanceof Uint8Array) {
     binary = params.buffer as Uint8Array;
   } else {
     // Dernier recours
-    // @ts-ignore any to Uint8Array
-    binary = new Uint8Array(params.buffer as any);
+    binary = new Uint8Array(params.buffer);
   }
   logger.info(
     {
@@ -378,7 +323,7 @@ export async function extractPersonalTaxReturn(params: {
     batches.push(dataUrls.slice(i, i + batchSize));
   }
 
-  let aggregated: ExtractedPersonalTaxReturn = { taxYear: undefined, items: [], slips: [], confidence: 0 };
+  const aggregated: ExtractedPersonalTaxReturn = { taxYear: undefined, items: [], slips: [], confidence: 0 };
   for (const pages of batches) {
     const body: any = {
       model,
@@ -499,16 +444,13 @@ export async function extractRentalTaxSummaries(params: {
 
   const { contentType } = params;
   let binary: Uint8Array;
-  // @ts-ignore
-  const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(params.buffer as any);
+  const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(params.buffer);
   if (isBuffer) {
-    // @ts-ignore
-    binary = new Uint8Array(params.buffer as any);
+    binary = new Uint8Array(params.buffer);
   } else if (params.buffer instanceof Uint8Array) {
     binary = params.buffer as Uint8Array;
   } else {
-    // @ts-ignore
-    binary = new Uint8Array(params.buffer as any);
+    binary = new Uint8Array(params.buffer);
   }
 
   let dataUrls: string[];

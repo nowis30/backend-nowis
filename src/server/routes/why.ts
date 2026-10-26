@@ -1,5 +1,7 @@
+import type { JournalEntryLine, PersonalTaxReturnLine, Prisma } from '@prisma/client';
 import { Router, NextFunction, Response } from 'express';
 import { z } from 'zod';
+
 import { prisma } from '../lib/prisma';
 import { authenticated, AuthenticatedRequest } from '../middlewares/authenticated';
 
@@ -25,11 +27,11 @@ whyRouter.get('/personal-income', async (req: AuthenticatedRequest, res: Respons
     const totalIncome = incomes.reduce((s, r) => s + Number(r.amount || 0), 0);
 
     const ret = await prisma.personalTaxReturn.findFirst({ where: { shareholderId, taxYear } });
-    let retLines: any[] = [];
-    let retSlips: any[] = [];
+    let retLines: PersonalTaxReturnLine[] = [];
+    let retSlips: Prisma.TaxSlipGetPayload<{ include: { lines: true } }>[] = [];
     if (ret) {
-      retLines = await (prisma as any).personalTaxReturnLine.findMany({ where: { returnId: ret.id }, orderBy: [{ section: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }] });
-      retSlips = await (prisma as any).taxSlip.findMany({ where: { returnId: ret.id }, orderBy: [{ id: 'asc' }], include: { lines: true } });
+      retLines = await prisma.personalTaxReturnLine.findMany({ where: { returnId: ret.id }, orderBy: [{ section: 'asc' }, { orderIndex: 'asc' }, { id: 'asc' }] });
+      retSlips = await prisma.taxSlip.findMany({ where: { returnId: ret.id }, orderBy: [{ id: 'asc' }], include: { lines: true } });
     }
 
     // Journal: récupérer les écritures de l'année pour l'utilisateur
@@ -40,7 +42,7 @@ whyRouter.get('/personal-income', async (req: AuthenticatedRequest, res: Respons
       orderBy: [{ entryDate: 'asc' }, { id: 'asc' }],
       select: { id: true, entryDate: true, description: true, reference: true }
     });
-    const linesByEntry: Record<number, any[]> = {};
+    const linesByEntry: Record<number, JournalEntryLine[]> = {};
     for (const e of entries) {
       linesByEntry[e.id] = await prisma.journalEntryLine.findMany({ where: { entryId: e.id }, orderBy: [{ id: 'asc' }] });
     }
@@ -57,12 +59,12 @@ whyRouter.get('/personal-income', async (req: AuthenticatedRequest, res: Respons
             federalTax: Number(ret.federalTax || 0),
             provincialTax: Number(ret.provincialTax || 0),
             balanceDue: Number(ret.balanceDue || 0),
-            lines: retLines.map((l: any) => ({ id: l.id, section: l.section, code: l.code ?? null, label: l.label, amount: Number(l.amount || 0), orderIndex: l.orderIndex || 0 })),
-            slips: retSlips.map((s: any) => ({ id: s.id, slipType: s.slipType, issuer: s.issuer ?? null, accountNumber: s.accountNumber ?? null, lines: (s.lines || []).map((li: any) => ({ id: li.id, code: li.code ?? null, label: li.label, amount: Number(li.amount || 0), orderIndex: li.orderIndex || 0 })) }))
+            lines: retLines.map((l) => ({ id: l.id, section: l.section, code: l.code ?? null, label: l.label, amount: Number(l.amount || 0), orderIndex: l.orderIndex || 0 })),
+            slips: retSlips.map((s) => ({ id: s.id, slipType: s.slipType, issuer: s.issuer ?? null, accountNumber: s.accountNumber ?? null, lines: (s.lines || []).map((li) => ({ id: li.id, code: li.code ?? null, label: li.label, amount: Number(li.amount || 0), orderIndex: li.orderIndex || 0 })) }))
           }
         : null,
       journal: {
-        entries: entries.map((e) => ({ id: e.id, entryDate: e.entryDate.toISOString(), description: e.description ?? null, reference: e.reference ?? null, lines: (linesByEntry[e.id] || []).map((l: any) => ({ id: l.id, accountCode: l.accountCode, debit: Number(l.debit || 0), credit: Number(l.credit || 0), memo: l.memo ?? null })) }))
+        entries: entries.map((e) => ({ id: e.id, entryDate: e.entryDate.toISOString(), description: e.description ?? null, reference: e.reference ?? null, lines: (linesByEntry[e.id] || []).map((l) => ({ id: l.id, accountCode: l.accountCode, debit: Number(l.debit || 0), credit: Number(l.credit || 0), memo: l.memo ?? null })) }))
       }
     });
   } catch (error) {

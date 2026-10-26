@@ -1,8 +1,11 @@
+import type { Redis } from 'ioredis';
+
 import { env } from '../env';
-// Typage souple pour éviter une dépendance dure aux types ioredis pendant les tests locaux sans node_modules
-type RedisLike = any;
-let redisPub: RedisLike | null = null;
-let redisSub: RedisLike | null = null;
+
+// Type-only import: Redis is still loaded lazily when persistence is configured.
+type RedisStreamRead = Array<[stream: string, entries: Array<[id: string, fields: string[]]>]>;
+let redisPub: Redis | null = null;
+let redisSub: Redis | null = null;
 let subLoopRunning = false;
 
 type EventPayload = Record<string, unknown> | undefined;
@@ -30,7 +33,7 @@ export function publish(event: AppEvent): void {
     try {
       // Store as JSON to a single field for simplicity
       redisPub.xadd('events', '*', 'json', JSON.stringify(e)).catch(() => {});
-    } catch {}
+    } catch { /* Redis persistence is optional; local subscribers have already received the event. */ }
   }
 }
 
@@ -48,7 +51,6 @@ export function getRecentEvents(limit = 50): AppEvent[] {
 export async function initEventBus(): Promise<void> {
   if (!env.REDIS_URL) return;
   try {
-    // @ts-ignore optional dependency: types may be missing in some local runs
     const { default: IORedis } = await import('ioredis');
     redisPub = new IORedis(env.REDIS_URL, { lazyConnect: true });
     redisSub = new IORedis(env.REDIS_URL, { lazyConnect: true });
@@ -68,8 +70,8 @@ export async function initEventBus(): Promise<void> {
 
 export async function shutdownEventBus(): Promise<void> {
   subLoopRunning = false;
-  try { await redisPub?.quit(); } catch {}
-  try { await redisSub?.quit(); } catch {}
+  try { await redisPub?.quit(); } catch { /* Shutdown must also finish when Redis is unavailable. */ }
+  try { await redisSub?.quit(); } catch { /* Shutdown must also finish when Redis is unavailable. */ }
   redisPub = null;
   redisSub = null;
 }
@@ -82,18 +84,18 @@ async function consumerLoop(): Promise<void> {
       // Read next entries for group
       const res = await redisSub.xreadgroup('GROUP', 'nowis', consumerName, 'COUNT', 50, 'BLOCK', 1000, 'STREAMS', 'events', '>' );
       if (Array.isArray(res)) {
-        for (const [, entries] of res as any[]) {
+        for (const [, entries] of res as RedisStreamRead) {
           for (const [id, fields] of entries) {
             try {
-              const idx = fields.findIndex((f: any) => f === 'json');
+              const idx = fields.findIndex((f) => f === 'json');
               if (idx >= 0) {
                 const payload = JSON.parse(fields[idx + 1]);
                 // Ré-injecte localement pour l’API /events/recent
                 publish(payload as AppEvent);
               }
-            } catch {}
+            } catch { /* Ignore a malformed stored event and continue consuming the stream. */ }
             // Ack
-            try { await redisSub.xack('events', 'nowis', id); } catch {}
+            try { await redisSub.xack('events', 'nowis', id); } catch { /* A failed acknowledgement must not stop the consumer. */ }
           }
         }
       }

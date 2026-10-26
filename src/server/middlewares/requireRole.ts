@@ -13,10 +13,12 @@ export function requireRole(roleName: string) {
       return res.status(401).json({ error: 'Utilisateur non authentifié.' });
     }
 
-    // Vérifie si l'utilisateur a le rôle demandé (global ou pour une company)
+    // Administrative routes require a global grant. A company-scoped role
+    // must never authorize cross-company user or role management.
     const userRoles = await prisma.userRole.findMany({
       where: {
         userId,
+        companyId: null,
         role: { name: roleName }
       }
     });

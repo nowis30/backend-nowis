@@ -1,7 +1,9 @@
+import { promises as fs } from 'fs';
+
+import { Prisma, type UploadedDocument } from '@prisma/client';
 import { Router, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { promises as fs } from 'fs';
 
 import { authenticated, type AuthenticatedRequest } from '../middlewares/authenticated';
 import { prisma } from '../lib/prisma';
@@ -17,7 +19,7 @@ const listQuery = z.object({
   taxYear: z.coerce.number().int().optional()
 });
 
-function serialize(d: any) {
+function serialize(d: UploadedDocument) {
   return {
     id: d.id,
     domain: d.domain,
@@ -39,7 +41,7 @@ function serialize(d: any) {
 documentsRouter.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { domain, taxYear } = listQuery.parse(req.query);
-  const docs = await (prisma as any).uploadedDocument.findMany({
+  const docs = await prisma.uploadedDocument.findMany({
       where: { userId: req.userId!, ...(domain ? { domain } : {}), ...(taxYear ? { taxYear } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
     });
@@ -63,7 +65,7 @@ documentsRouter.post('/', upload.single('file'), async (req: AuthenticatedReques
 
     const saved = await saveUserDocumentFile({ buffer: req.file.buffer, userId: req.userId!, originalName: req.file.originalname });
 
-  const created = await (prisma as any).uploadedDocument.create({
+  const created = await prisma.uploadedDocument.create({
       data: {
         userId: req.userId!,
         domain,
@@ -91,7 +93,7 @@ const updateBody = z.object({ label: z.string().trim().min(1).optional(), notes:
 documentsRouter.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = idParam.parse(req.params);
-  const doc = await (prisma as any).uploadedDocument.findFirst({ where: { id, userId: req.userId! } });
+  const doc = await prisma.uploadedDocument.findFirst({ where: { id, userId: req.userId! } });
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
     res.json(serialize(doc));
   } catch (error) {
@@ -102,7 +104,7 @@ documentsRouter.get('/:id', async (req: AuthenticatedRequest, res: Response, nex
 documentsRouter.get('/:id/download', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = idParam.parse(req.params);
-  const doc = await (prisma as any).uploadedDocument.findFirst({ where: { id, userId: req.userId! } });
+  const doc = await prisma.uploadedDocument.findFirst({ where: { id, userId: req.userId! } });
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
 
     const abs = resolveUserDocumentPath(doc.storagePath);
@@ -115,8 +117,8 @@ documentsRouter.get('/:id/download', async (req: AuthenticatedRequest, res: Resp
       stream.pipe(res);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' && (doc as any).content) {
-        const buf = (doc as any).content as Buffer;
+      if (code === 'ENOENT' && doc.content) {
+        const buf = doc.content as Buffer;
         res.setHeader('Content-Type', doc.contentType || 'application/octet-stream');
         res.setHeader('Content-Length', String(buf.byteLength));
         res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.originalName)}"`);
@@ -135,13 +137,16 @@ documentsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response, nex
     const { id } = idParam.parse(req.params);
     const body = updateBody.parse(req.body);
 
-  const updated = await (prisma as any).uploadedDocument.update({
-      where: { id },
+  const updated = await prisma.uploadedDocument.update({
+      where: { id, userId: req.userId! },
       data: { ...(body.label ? { label: body.label } : {}), ...(body.notes ? { notes: body.notes } : {}) }
     });
 
     res.json(serialize(updated));
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return res.status(404).json({ error: 'Document introuvable.' });
+    }
     next(error);
   }
 });
@@ -149,10 +154,10 @@ documentsRouter.put('/:id', async (req: AuthenticatedRequest, res: Response, nex
 documentsRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = idParam.parse(req.params);
-  const doc = await (prisma as any).uploadedDocument.findFirst({ where: { id, userId: req.userId! } });
+  const doc = await prisma.uploadedDocument.findFirst({ where: { id, userId: req.userId! } });
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
 
-  await (prisma as any).uploadedDocument.delete({ where: { id: doc.id } });
+  await prisma.uploadedDocument.delete({ where: { id: doc.id } });
     await deleteUserDocumentFile(doc.storagePath);
 
     res.status(204).send();

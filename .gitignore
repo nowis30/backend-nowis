@@ -33,3 +33,7 @@ yarn-error.log*
 
 # Prisma artefacts clients
 prisma/generated/
+# Keep the example, never local Prisma data.
+!.env.example
+prisma/*.db
+prisma/*.db-*

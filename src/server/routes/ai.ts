@@ -1,3 +1,5 @@
+import { promises as fs } from 'fs';
+
 import { Router, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -7,7 +9,6 @@ import { runLeverageConversation } from '../services/ai/coordinationAI';
 import { logger } from '../lib/logger';
 import { ingestDocument } from '../services/ai/ingest';
 import { resolveUserDocumentPath } from '../services/documentStorage';
-import { promises as fs } from 'fs';
 
 const aiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -148,20 +149,20 @@ aiRouter.post('/reingest', async (req: AuthenticatedRequest, res: Response, next
     const { domain, documentId, autoCreate, shareholderId, taxYear } = reingestQuerySchema.parse(req.query);
 
     const { prisma } = await import('../lib/prisma');
-    const doc = await (prisma as any).uploadedDocument.findFirst({ where: { id: documentId, userId: req.userId! } });
+    const doc = await prisma.uploadedDocument.findFirst({ where: { id: documentId, userId: req.userId! } });
 
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
 
-    const absPath = resolveUserDocumentPath((doc as any).storagePath);
+    const absPath = resolveUserDocumentPath(doc.storagePath);
     let buffer: Buffer;
     try {
       buffer = await fs.readFile(absPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        if ((doc as any).content) {
+        if (doc.content) {
           // Fallback: utiliser le binaire stocké en base si le fichier local est manquant (environnements éphémères)
-          buffer = (doc as any).content as Buffer;
+          buffer = doc.content as Buffer;
         } else {
           return res.status(410).json({
             error:
@@ -176,11 +177,11 @@ aiRouter.post('/reingest', async (req: AuthenticatedRequest, res: Response, next
     const result = await ingestDocument({
       userId: req.userId!,
       domain,
-  file: { buffer, contentType: (doc as any).contentType || 'application/pdf', filename: (doc as any).originalName },
+  file: { buffer, contentType: doc.contentType || 'application/pdf', filename: doc.originalName },
       options: {
         autoCreate: (autoCreate ?? 'false') === 'true',
         shareholderId: shareholderId ?? undefined,
-        taxYear: taxYear ?? (doc as any).taxYear ?? undefined
+        taxYear: taxYear ?? doc.taxYear ?? undefined
       }
     });
 
