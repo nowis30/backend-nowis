@@ -21,7 +21,7 @@ jobs:
           POSTGRES_DB: nowis_ci
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U nowis_test -d nowis_ci'
+          --health-cmd "pg_isready -U nowis_test -d nowis_ci"
           --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DATABASE_URL: postgresql://nowis_test:isolated-test-only@127.0.0.1:5432/nowis_ci
