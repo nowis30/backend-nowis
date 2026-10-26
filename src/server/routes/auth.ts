@@ -39,6 +39,12 @@ authRouter.post(
   '/register',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (!env.ALLOW_PUBLIC_REGISTRATION) {
+        return res.status(403).json({
+          code: 'REGISTRATION_DISABLED',
+          error: 'La création de compte est réservée aux invitations. Contactez votre administrateur.'
+        });
+      }
       const credentials = credentialsSchema.parse(req.body);
       const existing = await prisma.user.findUnique({ where: { email: credentials.email } });
 
@@ -52,19 +58,8 @@ authRouter.post(
           data: { email: credentials.email, passwordHash }
         });
 
-        const adminRole = await tx.role.upsert({
-          where: { name: 'ADMIN' },
-          update: {},
-          create: { name: 'ADMIN' }
-        });
-
-        await tx.userRole.create({
-          data: {
-            userId: createdUser.id,
-            roleId: adminRole.id,
-            companyId: null
-          }
-        });
+        // Public registration never grants administrative or company privileges.
+        // Existing administrators can assign an explicit role through /users.
 
         await tx.shareholder.create({
           data: {

@@ -6,6 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
+  ALLOW_PUBLIC_REGISTRATION: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
   ADVISOR_ENGINE: z.enum(['heuristic', 'gpt']).default('heuristic'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().url().optional(),
